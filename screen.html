@@ -2,125 +2,178 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>Live Dashboard | Shimano</title>
+    <title>高塔心理学 | 涅奥的观测枢纽</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- 引入 MQTT.js 替代原来的 PeerJS -->
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
-        :root { --bg: #050505; --panel: rgba(255,255,255,0.03); --border: rgba(255,255,255,0.08); --primary: #3b82f6; --text: #fff; }
-        body, html { margin: 0; padding: 0; background: #000; background-image: radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.15), transparent 25%), radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.15), transparent 25%); color: var(--text); font-family: -apple-system, sans-serif; overflow: hidden; height: 100vh; }
-        
-        .layout { display: grid; grid-template-columns: 350px 1fr 400px; gap: 24px; padding: 32px; height: 100vh; box-sizing: border-box; position: relative; z-index: 10; pointer-events: none; }
-        .glass-panel { background: var(--panel); border: 1px solid var(--border); border-radius: 24px; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); padding: 24px; display: flex; flex-direction: column; pointer-events: auto; }
-        
-        h3 { font-size: 1.2rem; font-weight: 500; color: #9ca3af; margin: 0 0 20px 0; letter-spacing: 1px; text-transform: uppercase; }
-        
-        .stat-box { margin-bottom: 20px; }
-        .stat-value { font-size: 2.5rem; font-weight: 700; color: #fff; }
-        .stat-label { font-size: 0.9rem; color: #6b7280; }
+        /* 尖塔暗黑风格流体背景 */
+        body, html { margin: 0; padding: 0; height: 100vh; overflow: hidden; font-family: "Microsoft YaHei", -apple-system, sans-serif; 
+            background: linear-gradient(-45deg, #1a0f14, #1c192e, #0d1b2a, #1a0f14); background-size: 400% 400%; animation: gradientBG 20s ease infinite; color: #e2e8f0; }
+        @keyframes gradientBG { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
 
-        .timer { font-size: 6rem; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; background: linear-gradient(to bottom, #fff, #9ca3af); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .center-area { display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        /* 黑曜石玻璃面板 */
+        .layout { display: grid; grid-template-columns: 350px 1fr 350px; gap: 20px; padding: 20px; height: 100vh; box-sizing: border-box; position: relative; z-index: 10; pointer-events: none; }
+        .glass-panel { background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 215, 0, 0.2); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); border-radius: 16px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: 20px; display: flex; flex-direction: column; pointer-events: auto; overflow: hidden;}
+        
+        h3 { font-size: 1.1rem; font-weight: 700; color: #fbbf24; margin: 0 0 15px 0; display: flex; justify-content: space-between; text-shadow: 0 2px 4px rgba(0,0,0,0.8);}
+        
+        /* 顶部状态条 */
+        .top-status { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(251, 191, 36, 0.4); padding: 10px 30px; border-radius: 30px; display: flex; gap: 30px; font-weight: bold; box-shadow: 0 5px 20px rgba(0,0,0,0.6); z-index: 20; pointer-events: auto; color: #e2e8f0;}
+        
+        .chart-box { flex: 1; min-height: 200px; margin-bottom: 20px; position: relative; }
+        
+        /* 涅奥与四勇士区 */
+        .dance-floor { height: 120px; display: flex; justify-content: center; align-items: flex-end; gap: 25px; border-bottom: 2px solid rgba(251, 191, 36, 0.3); padding-bottom: 10px; margin-bottom: 20px; margin-top: 60px;}
+        .dancer { font-size: 4rem; animation: float 3s ease-in-out infinite; transform-origin: bottom center; filter: drop-shadow(0 0 15px rgba(251, 191, 36, 0.3));}
+        .dancer:nth-child(1) { animation-delay: 0s; font-size: 5rem;} /* 涅奥 */
+        .dancer:nth-child(2) { animation-delay: 0.5s; } /* 战士 */
+        .dancer:nth-child(3) { animation-delay: 1.0s; } /* 猎手 */
+        .dancer:nth-child(4) { animation-delay: 1.5s; } /* 机器人 */
+        .dancer:nth-child(5) { animation-delay: 2.0s; } /* 观者 */
+        
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
 
-        /* 弹幕系统 */
-        #danmaku-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 50; overflow: hidden; }
-        .danmaku-msg { position: absolute; white-space: nowrap; font-size: 32px; font-weight: 600; color: #fff; text-shadow: 0 4px 12px rgba(0,0,0,0.8); animation: slideLeft linear forwards; }
+        /* 篝火心声瀑布流 */
+        .sub-answers-feed { flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 10px; padding: 5px;}
+        .sub-card { background: rgba(30, 41, 59, 0.8); border-left: 4px solid #fbbf24; padding: 15px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); animation: popIn 0.4s forwards; }
+        .sub-card .author { font-size: 0.85rem; color: #fbbf24; font-weight: 700; margin-bottom: 5px; }
+        @keyframes popIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* 高塔弹幕 */
+        #danmaku-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 100; overflow: hidden; }
+        .danmaku-msg { position: absolute; white-space: nowrap; font-size: 36px; font-weight: 900; color: #fff; text-shadow: 0 0 10px #000, 2px 2px 4px #000; animation: slideLeft linear forwards; display: flex; align-items: center; gap: 12px; }
+        .dm-tag { font-size: 20px; background: rgba(251, 191, 36, 0.9); color: #0f172a; padding: 5px 15px; border-radius: 5px; text-shadow: none; font-weight: bold;}
         @keyframes slideLeft { from { transform: translateX(100vw); } to { transform: translateX(-100%); } }
     </style>
 </head>
 <body>
     <div id="danmaku-layer"></div>
 
+    <div class="top-status">
+        <div style="color:#22c55e">📡 尖塔连接 (<span id="my-id">...</span>)</div>
+        <div>👥 挑战者: <span id="user-count" style="color:#fbbf24; font-size:1.2em;">0</span></div>
+        <div>⏳ 倒计时: <span id="countdown" style="color:#ef4444; font-size:1.2em;">05:00</span></div>
+    </div>
+
     <div class="layout">
+        <!-- 左侧图表 -->
         <div class="glass-panel">
-            <h3>System Status</h3>
-            <div class="stat-box">
-                <div class="stat-label">Connection Protocol</div>
-                <div class="stat-value" style="color: #34d399; font-size: 1.5rem; margin-top: 5px;">● MQTT WSS</div>
+            <h3>Q1. 涅奥的赐福选择 <span style="font-size:0.8em; color:#64748b">Bar</span></h3>
+            <div class="chart-box"><canvas id="chartQ1"></canvas></div>
+            
+            <h3>Q2. 遭遇地精大块头 <span style="font-size:0.8em; color:#64748b">Doughnut</span></h3>
+            <div class="chart-box"><canvas id="chartQ2"></canvas></div>
+        </div>
+
+        <!-- 中间：涅奥区 + 篝火心声 -->
+        <div class="glass-panel" style="background: rgba(15, 23, 42, 0.4);">
+            <div class="dance-floor">
+                <div class="dancer" title="涅奥">🐋</div>
+                <div class="dancer" title="铁甲战士">🛡️</div>
+                <div class="dancer" title="静默猎手">🗡️</div>
+                <div class="dancer" title="故障机器人">🔮</div>
+                <div class="dancer" title="观者">👁️</div>
             </div>
-            <div class="stat-box">
-                <div class="stat-label">Interactions Count</div>
-                <div class="stat-value" id="user-count">0</div>
-            </div>
-            <div class="stat-box" style="margin-top: auto;">
-                <div class="stat-label">Active Channel Topic</div>
-                <div style="font-family: monospace; color: #9ca3af; margin-top: 5px; font-size: 0.8rem;" id="my-id">Connecting...</div>
+            
+            <h3 style="justify-content: center; font-size: 1.3rem; color: #f97316;">🔥 篝火营地 (心声墙)</h3>
+            <div class="sub-answers-feed" id="sub-feed">
+                <div style="text-align: center; color: #64748b; margin-top: 20px;">等待挑战者在篝火旁留下信息...</div>
             </div>
         </div>
 
-        <div class="center-area">
-            <div style="font-size: 1.5rem; color: #6b7280; margin-bottom: -20px;">TIME REMAINING</div>
-            <div class="timer">05:00</div>
-        </div>
-
+        <!-- 右侧图表 -->
         <div class="glass-panel">
-            <h3>Live Responses</h3>
-            <div style="flex: 1; position: relative;">
-                <canvas id="liveChart"></canvas>
-            </div>
+            <h3>Q4. 商店的抉择 <span style="font-size:0.8em; color:#64748b">Pie</span></h3>
+            <div class="chart-box"><canvas id="chartQ4"></canvas></div>
+            
+            <h3>Q5. 本命职业倾向 <span style="font-size:0.8em; color:#64748b">Polar</span></h3>
+            <div class="chart-box"><canvas id="chartQ5"></canvas></div>
         </div>
     </div>
 
     <script>
-        // 初始化图表
-        const ctx = document.getElementById('liveChart').getContext('2d');
-        const chart = new Chart(ctx, {
+        // 战红, 猎绿, 机蓝, 观紫
+        Chart.defaults.color = '#cbd5e1';
+        const classColors = ['rgba(239, 68, 68, 0.85)', 'rgba(34, 197, 94, 0.85)', 'rgba(59, 130, 246, 0.85)', 'rgba(168, 85, 247, 0.85)'];
+        const itemColors = ['rgba(251, 191, 36, 0.8)', 'rgba(248, 113, 113, 0.8)', 'rgba(96, 165, 250, 0.8)', 'rgba(156, 163, 175, 0.8)'];
+
+        const chartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
+
+        const chartQ1 = new Chart(document.getElementById('chartQ1'), {
             type: 'bar',
-            data: {
-                labels: ['Option A', 'Option B', 'Option C', 'Option D'],
-                datasets: [{
-                    data: [0, 0, 0, 0],
-                    backgroundColor: ['rgba(59, 130, 246, 0.8)', 'rgba(139, 92, 246, 0.8)', 'rgba(236, 72, 153, 0.8)', 'rgba(16, 185, 129, 0.8)'],
-                    borderRadius: 8,
-                    borderSkipped: false
-                }]
-            },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af', stepSize: 1 } }, x: { grid: { display: false }, ticks: { color: '#9ca3af', font: { size: 14 } } } } }
+            data: { labels: ['A.掉血换遗物', 'B.拿100金币', 'C.随机稀有牌', 'D.换初始遗物'], datasets: [{ data: [0,0,0,0], backgroundColor: itemColors, borderRadius: 4 }] },
+            options: { ...chartOptions, scales: { y: { beginAtZero: true, ticks:{stepSize:1}, grid: {color: 'rgba(255,255,255,0.1)'} }, x:{ grid: {display: false} } } }
         });
 
-        // 弹幕动画函数
-        function fireDanmaku(text) {
+        const chartQ2 = new Chart(document.getElementById('chartQ2'), {
+            type: 'doughnut',
+            data: { labels: ['A.狂甩攻击', 'B.叠甲过过', 'C.喝药保命', 'D.SL大法'], datasets: [{ data: [0,0,0,0], backgroundColor: itemColors, borderWidth: 1, borderColor: '#0f172a' }] },
+            options: { ...chartOptions, plugins: { legend: { position: 'right', labels: {color: '#cbd5e1'} } } }
+        });
+
+        const chartQ4 = new Chart(document.getElementById('chartQ4'), {
+            type: 'pie',
+            data: { labels: ['A.删打击防御', 'B.买核心牌', 'C.梭哈遗物', 'D.买血瓶'], datasets: [{ data: [0,0,0,0], backgroundColor: itemColors, borderWidth: 1, borderColor: '#0f172a' }] },
+            options: { ...chartOptions, plugins: { legend: { position: 'right', labels: {color: '#cbd5e1'} } } }
+        });
+
+        // Q5 使用四职业代表色
+        const chartQ5 = new Chart(document.getElementById('chartQ5'), {
+            type: 'polarArea',
+            data: { labels: ['铁甲战士', '静默猎手', '故障机器人', '观者'], datasets: [{ data: [0,0,0,0], backgroundColor: classColors, borderColor: 'rgba(255,255,255,0.2)' }] },
+            options: { ...chartOptions, plugins: { legend: { position: 'right', labels: {color: '#cbd5e1'} } }, scales: { r: { grid: {color: 'rgba(255,255,255,0.1)'}, ticks: {display: false} } } }
+        });
+
+        let timeLeft = 300;
+        setInterval(() => { if(timeLeft > 0) { timeLeft--; document.getElementById('countdown').innerText = `${String(Math.floor(timeLeft/60)).padStart(2,'0')}:${String(timeLeft%60).padStart(2,'0')}`; } }, 1000);
+
+        function fireDanmaku(text, nickname) {
             const el = document.createElement('div');
             el.className = 'danmaku-msg';
-            el.innerText = text;
-            el.style.top = (Math.random() * 70 + 10) + '%'; 
-            const duration = Math.random() * 3 + 5; 
-            el.style.animationDuration = duration + 's';
+            el.innerHTML = `<span class="dm-tag">${nickname}</span> ${text}`;
+            el.style.top = (Math.random() * 70 + 15) + '%'; 
+            el.style.animationDuration = (Math.random() * 4 + 5) + 's';
             document.getElementById('danmaku-layer').appendChild(el);
-            setTimeout(() => el.remove(), duration * 1000);
+            setTimeout(() => el.remove(), 10000);
         }
 
-        // --- 核心：MQTT 云端通信逻辑 ---
-        const TOPIC = 'bjtu/shimano/room_888_xm'; // 设定专属频道
-        const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt'); // 使用加密的 WSS 协议
-        
-        let interactions = 0;
+        const feed = document.getElementById('sub-feed');
+        function addSubjectiveCard(text, nickname) {
+            if(feed.innerText.includes('等待')) feed.innerHTML = '';
+            const el = document.createElement('div');
+            el.className = 'sub-card';
+            el.innerHTML = `<div class="author">📜 猎手 ${nickname}：</div><div style="font-size:1.05rem; font-weight:500;">"${text}"</div>`;
+            feed.prepend(el);
+            if(feed.children.length > 5) feed.lastChild.remove();
+        }
+
+        // 修改为尖塔专属 Topic
+        const TOPIC = 'bjtu/spire/room_888'; 
+        const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt'); 
+        let users = new Set(); 
 
         client.on('connect', () => {
-            console.log('✅ 大屏已连接到 MQTT 服务器');
             document.getElementById('my-id').innerText = TOPIC;
-            client.subscribe(TOPIC); // 订阅频道，等待接收手机发来的消息
+            client.subscribe(TOPIC); 
         });
 
         client.on('message', (topic, message) => {
             try {
                 const data = JSON.parse(message.toString());
-                interactions++;
-                document.getElementById('user-count').innerText = interactions;
+                if(data.nickname) { users.add(data.nickname); document.getElementById('user-count').innerText = users.size; }
 
-                if(data.type === 'danmaku') {
-                    fireDanmaku(data.content);
-                } 
-                else if(data.type === 'answer') {
+                if(data.type === 'danmaku') fireDanmaku(data.content, data.nickname);
+                else if(data.type === 'answer_obj') {
                     const idx = ['A', 'B', 'C', 'D'].indexOf(data.option);
                     if(idx !== -1) { 
-                        chart.data.datasets[0].data[idx]++; 
-                        chart.update(); 
+                        if(data.qId === 'q1') { chartQ1.data.datasets[0].data[idx]++; chartQ1.update(); }
+                        if(data.qId === 'q2') { chartQ2.data.datasets[0].data[idx]++; chartQ2.update(); }
+                        if(data.qId === 'q4') { chartQ4.data.datasets[0].data[idx]++; chartQ4.update(); }
+                        if(data.qId === 'q5') { chartQ5.data.datasets[0].data[idx]++; chartQ5.update(); }
                     }
                 }
-            } catch (e) {
-                console.error("数据解析失败", e);
-            }
+                else if(data.type === 'answer_sub') addSubjectiveCard(data.text, data.nickname);
+            } catch (e) {}
         });
     </script>
 </body>

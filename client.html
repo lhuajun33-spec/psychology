@@ -3,144 +3,184 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>互动答题器</title>
-    <!-- 引入 MQTT.js 与撒花特效 -->
+    <title>尖塔遗物 | 猎手终端</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
-        :root { --bg: #111827; --card: #1f2937; --text: #f9fafb; --primary: #3b82f6; --primary-hover: #2563eb; }
-        body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; -webkit-tap-highlight-color: transparent; }
+        :root { --bg: #0f172a; --card: #1e293b; --text: #e2e8f0; --primary: #fbbf24; --primary-hover: #f59e0b; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: "Microsoft YaHei", -apple-system, sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         
-        .header { padding: 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .status { display: flex; align-items: center; font-size: 0.85rem; color: #9ca3af; }
-        .dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; margin-right: 8px; }
-        .dot.online { background: #10b981; box-shadow: 0 0 8px #10b981;}
+        .header { padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; background: #0b1120; border-bottom: 1px solid rgba(251, 191, 36, 0.2); z-index: 10;}
+        .status { display: flex; align-items: center; font-size: 0.85rem; color: #94a3b8; font-weight: bold;}
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; margin-right: 8px; box-shadow: 0 0 5px #ef4444;}
+        .dot.online { background: #22c55e; box-shadow: 0 0 8px #22c55e;}
 
-        .main-content { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; }
+        .main-content { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column;}
+        .card { background: var(--card); border-radius: 16px; padding: 28px 24px; border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         
-        .question-container { background: var(--card); border-radius: 20px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); transition: all 0.3s ease; }
-        .progress { font-size: 0.85rem; color: #9ca3af; margin-bottom: 12px; font-weight: 600; }
-        .q-title { font-size: 1.25rem; font-weight: 600; line-height: 1.5; margin-bottom: 24px; }
+        input[type="text"], textarea { width: 100%; padding: 14px; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 8px; font-size: 1rem; outline: none; transition: 0.2s; box-sizing: border-box; margin-top: 10px; margin-bottom: 20px;}
+        input[type="text"]:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.2);}
         
+        .q-title { font-size: 1.2rem; font-weight: 700; line-height: 1.5; margin-bottom: 24px; color: #fbbf24;}
         .options-list { display: flex; flex-direction: column; gap: 12px; }
-        .opt-btn { background: rgba(255,255,255,0.05); border: 2px solid transparent; color: var(--text); padding: 16px; border-radius: 14px; font-size: 1rem; text-align: left; transition: all 0.2s; outline: none; }
-        .opt-btn:active { transform: scale(0.98); }
-        .opt-btn.active { background: rgba(59, 130, 246, 0.1); border-color: var(--primary); }
+        .opt-btn { background: #334155; border: 1px solid #475569; color: var(--text); padding: 16px; border-radius: 8px; font-size: 1rem; text-align: left; transition: 0.2s; font-weight: 500;}
+        .opt-btn.active { background: rgba(251, 191, 36, 0.15); border-color: var(--primary); color: var(--primary);}
 
-        .submit-btn { margin-top: 30px; background: var(--primary); color: white; border: none; padding: 16px; border-radius: 14px; font-size: 1.1rem; font-weight: 600; transition: 0.2s; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4); opacity: 0.5; pointer-events: none; }
-        .submit-btn.ready { opacity: 1; pointer-events: auto; }
-        .submit-btn.ready:active { background: var(--primary-hover); transform: scale(0.98); }
+        .submit-btn { width: 100%; margin-top: 20px; background: var(--primary); color: #0f172a; border: none; padding: 16px; border-radius: 8px; font-size: 1.1rem; font-weight: 900; opacity: 0.5; pointer-events: none; transition: 0.2s;}
+        .submit-btn.ready { opacity: 1; pointer-events: auto; box-shadow: 0 4px 15px rgba(251, 191, 36, 0.3);}
+        .submit-btn.ready:active { transform: scale(0.98); }
 
-        .bottom-bar { background: var(--card); padding: 12px 20px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); display: flex; gap: 12px; border-top: 1px solid rgba(255,255,255,0.05); }
-        .dm-input { flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 12px 16px; border-radius: 20px; font-size: 1rem; outline: none; transition: 0.2s; }
-        .dm-input:focus { border-color: var(--primary); }
-        .send-btn { background: transparent; color: var(--primary); border: none; font-weight: 600; font-size: 1rem; padding: 0 10px; }
+        .bottom-bar { background: #0b1120; padding: 15px 20px; padding-bottom: calc(15px + env(safe-area-inset-bottom)); display: flex; gap: 12px; border-top: 1px solid rgba(255,255,255,0.1);}
+        .dm-input { flex: 1; background: #1e293b; border: 1px solid #334155; color: white; padding: 14px 20px; border-radius: 30px; outline: none; font-size: 1rem;}
+        .send-btn { background: var(--primary); color: #0f172a; border: none; font-weight: 900; padding: 0 20px; border-radius: 30px;}
 
-        #done-screen { display: none; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; }
-        #done-screen h2 { font-size: 2rem; margin-bottom: 10px; }
-        #done-screen p { color: #9ca3af; }
+        #test-section, #done-section, .bottom-bar { display: none; }
     </style>
 </head>
 <body>
     <div class="header">
-        <div style="font-weight: 700; letter-spacing: 1px;">SHIMANO</div>
+        <div style="font-weight: 900; color: var(--primary); letter-spacing: 1px;">SLAY THE SPIRE</div>
         <div class="status"><div class="dot" id="dot"></div><span id="status-text">Connecting</span></div>
     </div>
 
     <div class="main-content">
-        <div class="question-container" id="q-card">
-            <div class="progress" id="q-progress">Question 1 of 3</div>
-            <div class="q-title" id="q-title">正在加载题目...</div>
-            <div class="options-list" id="opt-container"></div>
-            <button class="submit-btn" id="submit-btn" onclick="submitAnswer()">确认提交</button>
+        <!-- 注册 -->
+        <div class="card" id="reg-section">
+            <h2 style="margin-top:0; color: #fbbf24;">猎手终端登记</h2>
+            <p style="color:#94a3b8; font-size:0.9rem;">高塔正在注视着你。请输入你的代号以连接涅奥的意识。</p>
+            <label style="font-weight: 600; color: #cbd5e1;">你的猎手代号</label>
+            <input type="text" id="nickname-input" placeholder="例如：防战单推人" maxlength="12">
+            <button class="submit-btn ready" onclick="startTest()">进入高塔 →</button>
         </div>
 
-        <div id="done-screen">
-            <h2>🎉 答题完成</h2>
-            <p>感谢您的参与！请看大屏幕统计结果。</p>
+        <!-- 答题 -->
+        <div class="card" id="test-section">
+            <div style="font-size: 0.85rem; color: #94a3b8; font-weight: 700; margin-bottom: 10px;" id="q-progress">层数 1 / 5</div>
+            <div class="q-title" id="q-title">...</div>
+            <div class="options-list" id="obj-container"></div>
+            <div id="sub-container" style="display: none;">
+                <textarea id="sub-input" rows="4" placeholder="在此刻下你的墓志铭或心声..."></textarea>
+            </div>
+            <button class="submit-btn" id="submit-btn" onclick="submitAnswer()">确认抉择</button>
+        </div>
+
+        <!-- 结束 -->
+        <div id="done-section" style="text-align: center; margin-top: 50px;">
+            <h1 style="font-size: 4.5rem; margin: 0; filter: drop-shadow(0 0 20px rgba(251,191,36,0.5));">🐋</h1>
+            <h2 style="color: #fbbf24;">攀登结束</h2>
+            <p style="color: #94a3b8; line-height: 1.6;">你的选择已被高塔记录。<br>请抬头查看枢纽大屏，寻找与你产生共鸣的灵魂。</p>
         </div>
     </div>
 
-    <div class="bottom-bar">
-        <input type="text" id="dm-input" class="dm-input" placeholder="输入弹幕参与讨论...">
+    <!-- 弹幕栏 -->
+    <div class="bottom-bar" id="dm-bar">
+        <input type="text" id="dm-input" class="dm-input" placeholder="发送全息广播...">
         <button class="send-btn" onclick="sendDM()">发送</button>
     </div>
 
     <script>
-        // 渲染题目逻辑
-        const questions = [
-            { id: 1, title: "本次 Shimano 研讨会项目中，企业的核心转型方向是？", options: [{val: 'A', text: "A. 纯硬件制造"}, {val: 'B', text: "B. 数字化与生态构建"}, {val: 'C', text: "C. 放弃自行车业务"}, {val: 'D', text: "D. 降价促销策略"}] },
-            { id: 2, title: "在 Shimano 产品生态圈构建中，哪项平台技术起到了关键的数据链接作用？", options: [{val: 'A', text: "A. E-TUBE 平台"}, {val: 'B', text: "B. 传统机械变速研发"}, {val: 'C', text: "C. 碳纤维成型技术"}, {val: 'D', text: "D. 气动风洞测试"}] },
-            { id: 3, title: "未来智慧出行的主要商业模式，以下哪项不在 Shimano 的重点布局中？", options: [{val: 'A', text: "A. 硬件一次性买卖"}, {val: 'B', text: "B. 骑行数据追踪"}, {val: 'C', text: "C. 智能零配件维保"}, {val: 'D', text: "D. 纯外卖配送服务"}] }
-        ];
-
+        let nickname = '';
         let currentIndex = 0;
         let selectedOption = null;
 
+        // --- 杀戮尖塔专属题库 ---
+        const questions = [
+            { id: 'q1', type: 'objective', title: "Q1. 游戏开局，伟大的涅奥给了你四个选项，你的第一直觉是？", options: [{val: 'A', text: "A. 失去最大生命，换取稀有遗物 (赌狗必选)"}, {val: 'B', text: "B. 稳扎稳打，拿100金币去商店"}, {val: 'C', text: "C. 获得一张随机的稀有牌 (单卡致胜)"}, {val: 'D', text: "D. 失去初始遗物，换取随机Boss遗物 (天胡或天谴)"}] },
+            { id: 'q2', type: 'objective', title: "Q2. 第一层遇到精英怪「地精大块头」(越放技能它攻击越高)，你会怎么打？", options: [{val: 'A', text: "A. 拼了！狂甩攻击牌跟它换血"}, {val: 'B', text: "B. 习惯性叠甲，然后被它锤爆"}, {val: 'C', text: "C. 不省了，直接喝掉珍贵的药水"}, {val: 'D', text: "D. 看情况不对，直接按 ESC 退出重进 (SL大法)"}] },
+            { id: 'q3', type: 'subjective', title: "Q3. [高塔篝火] 当你残血来到篝火营地，看着跳动的火焰，你此刻心里在想什么？" },
+            { id: 'q4', type: 'objective', title: "Q4. 好不容易走进商店，但你身上的金币只够买一样东西，你会买？", options: [{val: 'A', text: "A. 删一张基础的打击/防御卡 (卡组精简)"}, {val: 'B', text: "B. 购买一张目前卡组急需的核心牌"}, {val: 'C', text: "C. 购买一个看起来很有趣的遗物"}, {val: 'D', text: "D. 实在没血了，买个小血瓶保命"}] },
+            { id: 'q5', type: 'objective', title: "Q5. 凭你的性格直觉，你的本命职业应该是？", options: [{val: 'A', text: "A. 铁甲战士 (Ironclad) - 莽就完了，力量战无敌"}, {val: 'B', text: "B. 静默猎手 (Silent) - 疯狂过牌，精密计算毒伤"}, {val: 'C', text: "C. 故障机器人 (Defect) - 憋大招启动，然后双手离开键盘"}, {val: 'D', text: "D. 观者 (Watcher) - 伤害爆炸，但算错一血直接伏笔猝死"}] }
+        ];
+
+        // 尖塔专属 Topic
+        const TOPIC = 'bjtu/spire/room_888'; 
+        const mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt'); 
+
+        mqttClient.on('connect', () => {
+            document.getElementById('dot').classList.add('online');
+            document.getElementById('status-text').innerText = 'Connected';
+        });
+
+        function startTest() {
+            const name = document.getElementById('nickname-input').value.trim();
+            if(!name) return alert("无名之辈无法进入高塔，请登记代号。");
+            nickname = name;
+            if(mqttClient.connected) mqttClient.publish(TOPIC, JSON.stringify({ type: 'join', nickname: nickname }));
+            
+            document.getElementById('reg-section').style.display = 'none';
+            document.getElementById('test-section').style.display = 'block';
+            document.getElementById('dm-bar').style.display = 'flex';
+            renderQuestion();
+        }
+
         function renderQuestion() {
             if (currentIndex >= questions.length) {
-                document.getElementById('q-card').style.display = 'none';
-                document.getElementById('done-screen').style.display = 'flex';
+                document.getElementById('test-section').style.display = 'none';
+                document.getElementById('done-section').style.display = 'block';
                 return;
             }
             const q = questions[currentIndex];
-            document.getElementById('q-progress').innerText = `Question ${currentIndex + 1} of ${questions.length}`;
+            document.getElementById('q-progress').innerText = `层数 ${currentIndex + 1} / ${questions.length}`;
             document.getElementById('q-title').innerText = q.title;
             
-            const container = document.getElementById('opt-container');
-            container.innerHTML = ''; 
+            const objContainer = document.getElementById('obj-container');
+            const subContainer = document.getElementById('sub-container');
+            const submitBtn = document.getElementById('submit-btn');
+            
+            objContainer.innerHTML = '';
+            document.getElementById('sub-input').value = '';
             selectedOption = null;
-            document.getElementById('submit-btn').classList.remove('ready');
+            submitBtn.classList.remove('ready');
 
-            q.options.forEach(opt => {
-                const btn = document.createElement('button');
-                btn.className = 'opt-btn';
-                btn.innerText = opt.text;
-                btn.onclick = () => {
-                    document.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    selectedOption = opt.val;
-                    document.getElementById('submit-btn').classList.add('ready');
-                };
-                container.appendChild(btn);
-            });
-        }
-        renderQuestion();
-
-        // --- 核心：MQTT 云端通信逻辑 ---
-        const TOPIC = 'bjtu/shimano/room_888_xm'; // 必须和大屏保持完全一致
-        const mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt'); // 使用加密端口
-
-        mqttClient.on('connect', () => {
-            console.log("✅ 手机端已连接云服务器");
-            document.getElementById('dot').classList.add('online');
-            document.getElementById('status-text').innerText = 'Connected';
-            // 发送一条连接提示给大屏，增加互动计数
-            mqttClient.publish(TOPIC, JSON.stringify({ type: 'join' }));
-        });
-
-        // 提交答案
-        function submitAnswer() {
-            if(selectedOption && mqttClient.connected) {
-                const payload = JSON.stringify({ type: 'answer', option: selectedOption, qId: questions[currentIndex].id });
-                mqttClient.publish(TOPIC, payload); // 直接发布到频道
-                
-                confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#3b82f6', '#10b981', '#ffffff'] });
-                
-                setTimeout(() => {
-                    currentIndex++;
-                    renderQuestion();
-                }, 800);
+            if (q.type === 'objective') {
+                objContainer.style.display = 'flex';
+                subContainer.style.display = 'none';
+                q.options.forEach(opt => {
+                    const btn = document.createElement('button');
+                    btn.className = 'opt-btn';
+                    btn.innerText = opt.text;
+                    btn.onclick = () => {
+                        document.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        selectedOption = opt.val;
+                        submitBtn.classList.add('ready');
+                    };
+                    objContainer.appendChild(btn);
+                });
+            } else {
+                objContainer.style.display = 'none';
+                subContainer.style.display = 'block';
+                const input = document.getElementById('sub-input');
+                input.oninput = () => submitBtn.classList.toggle('ready', input.value.trim().length > 0);
             }
         }
 
-        // 发送弹幕
+        function submitAnswer() {
+            if(!mqttClient.connected) return alert("与涅奥的连接中断...");
+            const q = questions[currentIndex];
+            let payload = { nickname: nickname, qId: q.id };
+
+            if (q.type === 'objective' && selectedOption) {
+                payload.type = 'answer_obj'; payload.option = selectedOption;
+            } else if (q.type === 'subjective') {
+                const text = document.getElementById('sub-input').value.trim();
+                if(!text) return;
+                payload.type = 'answer_sub'; payload.text = text;
+            } else return;
+
+            mqttClient.publish(TOPIC, JSON.stringify(payload));
+            
+            // 撒花颜色改为战猎机观四色
+            confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 }, colors: ['#ef4444', '#22c55e', '#3b82f6', '#a855f7', '#fbbf24'] });
+            
+            setTimeout(() => { currentIndex++; renderQuestion(); }, 600);
+        }
+
         function sendDM() {
             const input = document.getElementById('dm-input');
             const val = input.value.trim();
-            if(val && mqttClient.connected) { 
-                const payload = JSON.stringify({ type: 'danmaku', content: val });
-                mqttClient.publish(TOPIC, payload); 
+            if(val && mqttClient.connected && nickname) { 
+                mqttClient.publish(TOPIC, JSON.stringify({ type: 'danmaku', content: val, nickname: nickname })); 
                 input.value = ''; 
             }
         }
