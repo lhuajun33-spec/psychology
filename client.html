@@ -160,6 +160,24 @@
                 input.value = ''; 
             }
         }
+        // 捕获客户端自身的连接错误
+        peer.on('error', (err) => {
+            document.getElementById('status-text').innerText = 'Error: ' + err.type;
+            document.getElementById('status-text').style.color = '#ef4444';
+            console.error("PeerJS 报错详情:", err);
+            alert("连接报错：" + err.type); // 直接在手机上弹窗显示错误
+        });
+
+        // 捕获数据通道断开
+        if(conn) {
+            conn.on('close', () => {
+                document.getElementById('status-text').innerText = 'Disconnected';
+                document.getElementById('dot').classList.remove('online');
+            });
+            conn.on('error', (err) => {
+                alert("通道报错：" + err);
+            });
+        }
     </script>
 </body>
 </html>
