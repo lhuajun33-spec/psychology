@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统入口 | 交互式中控网关</title>
+    <style>
+        :root { --neon-blue: #00f3ff; --neon-purple: #bc13fe; --bg-dark: #050505; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: var(--bg-dark); color: white; font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+        #bg-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+        .portal-container { position: relative; z-index: 10; text-align: center; width: 90%; max-width: 900px; }
+        .header { margin-bottom: 60px; }
+        .header h1 { font-size: 2.5rem; letter-spacing: 5px; text-transform: uppercase; background: linear-gradient(to right, var(--neon-blue), var(--neon-purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 10px; }
+        .header p { color: rgba(255, 255, 255, 0.5); font-size: 1rem; letter-spacing: 2px; }
+        .role-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+        @media (max-width: 600px) { .role-grid { grid-template-columns: 1fr; } }
+        .role-card { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(0, 243, 255, 0.2); border-radius: 20px; padding: 40px; text-decoration: none; color: white; backdrop-filter: blur(15px); transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); position: relative; overflow: hidden; }
+        .role-card:hover { transform: translateY(-10px); border-color: var(--neon-blue); box-shadow: 0 0 30px rgba(0, 243, 255, 0.2); background: rgba(255, 255, 255, 0.07); }
+        .icon { font-size: 50px; margin-bottom: 20px; display: block; }
+        .role-name { font-size: 1.5rem; font-weight: bold; margin-bottom: 10px; display: block; }
+        .role-desc { font-size: 0.9rem; color: #888; line-height: 1.4; }
+        .footer { margin-top: 80px; font-size: 0.8rem; color: rgba(255,255,255,0.2); }
+    </style>
+</head>
+<body>
+    <canvas id="bg-canvas"></canvas>
+    <div class="portal-container">
+        <div class="header">
+            <h1>SHIMANO SYMPOSIUM</h1>
+            <p>交互式现场管理系统</p>
+        </div>
+        <div class="role-grid">
+            <a href="screen.html" class="role-card">
+                <span class="icon">🖥️</span>
+                <span class="role-name">启动中控大屏</span>
+                <span class="role-desc">用于投影展示、实时数据统计与全屏弹幕渲染</span>
+            </a>
+            <a href="client.html" class="role-card">
+                <span class="icon">📱</span>
+                <span class="role-name">参与者入口</span>
+                <span class="role-desc">扫描二维码加入互动，发送弹幕并参与实时答题</span>
+            </a>
+        </div>
+        <div class="footer">BJTU WEIHAI &copy; 2026 RESEARCH PROJECT BY XUE MUQING</div>
+    </div>
+    <script>
+        const canvas = document.getElementById('bg-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        function init() {
+            canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+            particles = [];
+            for (let i = 0; i < 80; i++) {
+                particles.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, vx: (Math.random() - 0.5) * 0.5, vy: (Math.random() - 0.5) * 0.5 });
+            }
+        }
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'rgba(0, 243, 255, 0.5)';
+            ctx.strokeStyle = 'rgba(0, 243, 255, 0.05)';
+            particles.forEach((p, i) => {
+                p.x += p.vx; p.y += p.vy;
+                if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+                if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+                ctx.beginPath(); ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2); ctx.fill();
+                for (let j = i + 1; j < particles.length; j++) {
+                    const p2 = particles[j];
+                    const dist = Math.hypot(p.x - p2.x, p.y - p2.y);
+                    if (dist < 150) { ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p2.x, p2.y); ctx.stroke(); }
+                }
+            });
+            requestAnimationFrame(draw);
+        }
+        window.addEventListener('resize', init);
+        init(); draw();
+    </script>
+</body>
+</html>
