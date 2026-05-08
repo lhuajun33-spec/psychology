@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <title>Live Dashboard | Shimano</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- 引入 MQTT.js 替代原来的 PeerJS -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         :root { --bg: #050505; --panel: rgba(255,255,255,0.03); --border: rgba(255,255,255,0.08); --primary: #3b82f6; --text: #fff; }
         body, html { margin: 0; padding: 0; background: #000; background-image: radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.15), transparent 25%), radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.15), transparent 25%); color: var(--text); font-family: -apple-system, sans-serif; overflow: hidden; height: 100vh; }
@@ -28,34 +29,30 @@
     </style>
 </head>
 <body>
-    <!-- 全屏弹幕层 -->
     <div id="danmaku-layer"></div>
 
     <div class="layout">
-        <!-- 左侧：系统状态 -->
         <div class="glass-panel">
             <h3>System Status</h3>
             <div class="stat-box">
-                <div class="stat-label">Connection State</div>
-                <div class="stat-value" style="color: #34d399; font-size: 1.5rem; margin-top: 5px;">● Online</div>
+                <div class="stat-label">Connection Protocol</div>
+                <div class="stat-value" style="color: #34d399; font-size: 1.5rem; margin-top: 5px;">● MQTT WSS</div>
             </div>
             <div class="stat-box">
-                <div class="stat-label">Connected Devices</div>
+                <div class="stat-label">Interactions Count</div>
                 <div class="stat-value" id="user-count">0</div>
             </div>
             <div class="stat-box" style="margin-top: auto;">
-                <div class="stat-label">Peer ID (Gateway)</div>
-                <div style="font-family: monospace; color: #9ca3af; margin-top: 5px;" id="my-id">Initializing...</div>
+                <div class="stat-label">Active Channel Topic</div>
+                <div style="font-family: monospace; color: #9ca3af; margin-top: 5px; font-size: 0.8rem;" id="my-id">Connecting...</div>
             </div>
         </div>
 
-        <!-- 中间：核心展示区 -->
         <div class="center-area">
             <div style="font-size: 1.5rem; color: #6b7280; margin-bottom: -20px;">TIME REMAINING</div>
             <div class="timer">05:00</div>
         </div>
 
-        <!-- 右侧：实时数据统计 -->
         <div class="glass-panel">
             <h3>Live Responses</h3>
             <div style="flex: 1; position: relative;">
@@ -65,7 +62,7 @@
     </div>
 
     <script>
-        // 1. 初始化优雅的柱状图
+        // 初始化图表
         const ctx = document.getElementById('liveChart').getContext('2d');
         const chart = new Chart(ctx, {
             type: 'bar',
@@ -81,44 +78,49 @@
             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af', stepSize: 1 } }, x: { grid: { display: false }, ticks: { color: '#9ca3af', font: { size: 14 } } } } }
         });
 
-        // 2. 发送弹幕逻辑
+        // 弹幕动画函数
         function fireDanmaku(text) {
             const el = document.createElement('div');
             el.className = 'danmaku-msg';
             el.innerText = text;
             el.style.top = (Math.random() * 70 + 10) + '%'; 
-            const duration = Math.random() * 3 + 5; // 5-8秒飘过
+            const duration = Math.random() * 3 + 5; 
             el.style.animationDuration = duration + 's';
             document.getElementById('danmaku-layer').appendChild(el);
             setTimeout(() => el.remove(), duration * 1000);
         }
 
-        // 3. WebRTC 连接逻辑 (请勿更改此固定房间号 bjtu-shimano-screen)
-        const peer = new Peer('bjtu-shimano-screen', {
-            config: { 'iceServers': [
-                { urls: 'stun:stun.l.google.com:19302' },
-                // ⚠️ 注意：在这里填入你的 credential 密码
-                { urls: 'turn:global.relay.metered.ca:80', username: '79db8zc5fvuk', credential: 'bgz69b54c5qyn37y2hzydmtubx4qnnthysgxkydq78zmtf42th5uuvbua8jpumvk' }
-            ]},
-            debug: 2
+        // --- 核心：MQTT 云端通信逻辑 ---
+        const TOPIC = 'bjtu/shimano/room_888_xm'; // 设定专属频道
+        const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt'); // 使用加密的 WSS 协议
+        
+        let interactions = 0;
+
+        client.on('connect', () => {
+            console.log('✅ 大屏已连接到 MQTT 服务器');
+            document.getElementById('my-id').innerText = TOPIC;
+            client.subscribe(TOPIC); // 订阅频道，等待接收手机发来的消息
         });
 
-        let users = 0;
-        peer.on('open', id => document.getElementById('my-id').innerText = id);
-        peer.on('connection', conn => {
-            users++; document.getElementById('user-count').innerText = users;
-            conn.on('data', data => {
+        client.on('message', (topic, message) => {
+            try {
+                const data = JSON.parse(message.toString());
+                interactions++;
+                document.getElementById('user-count').innerText = interactions;
+
                 if(data.type === 'danmaku') {
                     fireDanmaku(data.content);
-                } else if(data.type === 'answer') {
+                } 
+                else if(data.type === 'answer') {
                     const idx = ['A', 'B', 'C', 'D'].indexOf(data.option);
                     if(idx !== -1) { 
                         chart.data.datasets[0].data[idx]++; 
                         chart.update(); 
                     }
                 }
-            });
-            conn.on('close', () => { users--; document.getElementById('user-count').innerText = users; });
+            } catch (e) {
+                console.error("数据解析失败", e);
+            }
         });
     </script>
 </body>

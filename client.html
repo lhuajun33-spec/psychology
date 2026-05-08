@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>互动答题器</title>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- 引入 MQTT.js 与撒花特效 -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         :root { --bg: #111827; --card: #1f2937; --text: #f9fafb; --primary: #3b82f6; --primary-hover: #2563eb; }
@@ -13,7 +14,7 @@
         .header { padding: 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); }
         .status { display: flex; align-items: center; font-size: 0.85rem; color: #9ca3af; }
         .dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; margin-right: 8px; }
-        .dot.online { background: #10b981; }
+        .dot.online { background: #10b981; box-shadow: 0 0 8px #10b981;}
 
         .main-content { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; }
         
@@ -30,13 +31,11 @@
         .submit-btn.ready { opacity: 1; pointer-events: auto; }
         .submit-btn.ready:active { background: var(--primary-hover); transform: scale(0.98); }
 
-        /* 弹幕栏 */
         .bottom-bar { background: var(--card); padding: 12px 20px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); display: flex; gap: 12px; border-top: 1px solid rgba(255,255,255,0.05); }
         .dm-input { flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 12px 16px; border-radius: 20px; font-size: 1rem; outline: none; transition: 0.2s; }
         .dm-input:focus { border-color: var(--primary); }
         .send-btn { background: transparent; color: var(--primary); border: none; font-weight: 600; font-size: 1rem; padding: 0 10px; }
 
-        /* 完成界面 */
         #done-screen { display: none; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; }
         #done-screen h2 { font-size: 2rem; margin-bottom: 10px; }
         #done-screen p { color: #9ca3af; }
@@ -49,17 +48,13 @@
     </div>
 
     <div class="main-content">
-        <!-- 答题卡片区 -->
         <div class="question-container" id="q-card">
             <div class="progress" id="q-progress">Question 1 of 3</div>
             <div class="q-title" id="q-title">正在加载题目...</div>
-            <div class="options-list" id="opt-container">
-                <!-- 选项由 JS 动态生成 -->
-            </div>
+            <div class="options-list" id="opt-container"></div>
             <button class="submit-btn" id="submit-btn" onclick="submitAnswer()">确认提交</button>
         </div>
 
-        <!-- 答题完成提示区 -->
         <div id="done-screen">
             <h2>🎉 答题完成</h2>
             <p>感谢您的参与！请看大屏幕统计结果。</p>
@@ -72,7 +67,7 @@
     </div>
 
     <script>
-        // === 题库配置 (你可以随便增加或修改) ===
+        // 渲染题目逻辑
         const questions = [
             { id: 1, title: "本次 Shimano 研讨会项目中，企业的核心转型方向是？", options: [{val: 'A', text: "A. 纯硬件制造"}, {val: 'B', text: "B. 数字化与生态构建"}, {val: 'C', text: "C. 放弃自行车业务"}, {val: 'D', text: "D. 降价促销策略"}] },
             { id: 2, title: "在 Shimano 产品生态圈构建中，哪项平台技术起到了关键的数据链接作用？", options: [{val: 'A', text: "A. E-TUBE 平台"}, {val: 'B', text: "B. 传统机械变速研发"}, {val: 'C', text: "C. 碳纤维成型技术"}, {val: 'D', text: "D. 气动风洞测试"}] },
@@ -82,20 +77,18 @@
         let currentIndex = 0;
         let selectedOption = null;
 
-        // 渲染题目函数
         function renderQuestion() {
             if (currentIndex >= questions.length) {
                 document.getElementById('q-card').style.display = 'none';
                 document.getElementById('done-screen').style.display = 'flex';
                 return;
             }
-            
             const q = questions[currentIndex];
             document.getElementById('q-progress').innerText = `Question ${currentIndex + 1} of ${questions.length}`;
             document.getElementById('q-title').innerText = q.title;
             
             const container = document.getElementById('opt-container');
-            container.innerHTML = ''; // 清空上一题选项
+            container.innerHTML = ''; 
             selectedOption = null;
             document.getElementById('submit-btn').classList.remove('ready');
 
@@ -104,7 +97,6 @@
                 btn.className = 'opt-btn';
                 btn.innerText = opt.text;
                 btn.onclick = () => {
-                    // 处理选中状态
                     document.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
                     selectedOption = opt.val;
@@ -113,37 +105,28 @@
                 container.appendChild(btn);
             });
         }
-
-        // 初始化渲染第一题
         renderQuestion();
 
-        // === WebRTC 通信逻辑 ===
-        let conn = null;
-        const peer = new Peer({ config: { 'iceServers': [
-            { urls: 'stun:stun.l.google.com:19302' },
-            // ⚠️ 注意：在这里填入你的 credential 密码
-            { urls: 'turn:global.relay.metered.ca:80', username: '79db8zc5fvuk', credential: 'bgz69b54c5qyn37y2hzydmtubx4qnnthysgxkydq78zmtf42th5uuvbua8jpumvk' }
-        ]}});
-        
-        peer.on('open', () => {
-            // 必须与大屏端的 ID 保持一致！
-            conn = peer.connect('bjtu-shimano-screen');
-            conn.on('open', () => {
-                document.getElementById('dot').classList.add('online');
-                document.getElementById('status-text').innerText = 'Connected';
-            });
+        // --- 核心：MQTT 云端通信逻辑 ---
+        const TOPIC = 'bjtu/shimano/room_888_xm'; // 必须和大屏保持完全一致
+        const mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt'); // 使用加密端口
+
+        mqttClient.on('connect', () => {
+            console.log("✅ 手机端已连接云服务器");
+            document.getElementById('dot').classList.add('online');
+            document.getElementById('status-text').innerText = 'Connected';
+            // 发送一条连接提示给大屏，增加互动计数
+            mqttClient.publish(TOPIC, JSON.stringify({ type: 'join' }));
         });
 
-        // 提交答案逻辑
+        // 提交答案
         function submitAnswer() {
-            if(selectedOption && conn && conn.open) {
-                // 将答案发给大屏
-                conn.send({ type: 'answer', option: selectedOption, qId: questions[currentIndex].id });
+            if(selectedOption && mqttClient.connected) {
+                const payload = JSON.stringify({ type: 'answer', option: selectedOption, qId: questions[currentIndex].id });
+                mqttClient.publish(TOPIC, payload); // 直接发布到频道
                 
-                // 撒花特效
                 confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#3b82f6', '#10b981', '#ffffff'] });
                 
-                // 延迟 0.8 秒后自动进入下一题
                 setTimeout(() => {
                     currentIndex++;
                     renderQuestion();
@@ -151,32 +134,15 @@
             }
         }
 
-        // 发送弹幕逻辑
+        // 发送弹幕
         function sendDM() {
             const input = document.getElementById('dm-input');
             const val = input.value.trim();
-            if(val && conn && conn.open) { 
-                conn.send({ type: 'danmaku', content: val }); 
+            if(val && mqttClient.connected) { 
+                const payload = JSON.stringify({ type: 'danmaku', content: val });
+                mqttClient.publish(TOPIC, payload); 
                 input.value = ''; 
             }
-        }
-        // 捕获客户端自身的连接错误
-        peer.on('error', (err) => {
-            document.getElementById('status-text').innerText = 'Error: ' + err.type;
-            document.getElementById('status-text').style.color = '#ef4444';
-            console.error("PeerJS 报错详情:", err);
-            alert("连接报错：" + err.type); // 直接在手机上弹窗显示错误
-        });
-
-        // 捕获数据通道断开
-        if(conn) {
-            conn.on('close', () => {
-                document.getElementById('status-text').innerText = 'Disconnected';
-                document.getElementById('dot').classList.remove('online');
-            });
-            conn.on('error', (err) => {
-                alert("通道报错：" + err);
-            });
         }
     </script>
 </body>
