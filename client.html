@@ -3,150 +3,163 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>动态答题面板</title>
+    <title>互动答题器</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
-        :root { --bg: #090a0f; --primary: #00f3ff; --secondary: #bc13fe; }
-        body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: white; display: flex; flex-direction: column; height: 100vh; overflow: hidden; perspective: 1000px; /* 开启3D视角 */ }
+        :root { --bg: #111827; --card: #1f2937; --text: #f9fafb; --primary: #3b82f6; --primary-hover: #2563eb; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; -webkit-tap-highlight-color: transparent; }
         
-        /* 顶部状态栏 */
-        .status-bar { padding: 15px; text-align: center; font-size: 0.9em; border-bottom: 1px solid rgba(0,243,255,0.2); background: rgba(0,0,0,0.5); backdrop-filter: blur(10px); }
-        .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: red; margin-right: 5px; box-shadow: 0 0 10px red; }
-        .status-dot.online { background: #0f0; box-shadow: 0 0 10px #0f0; }
+        .header { padding: 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .status { display: flex; align-items: center; font-size: 0.85rem; color: #9ca3af; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; margin-right: 8px; }
+        .dot.online { background: #10b981; }
 
-        /* 核心 3D 答题卡片 */
-        .question-card { flex: 1; margin: 30px 20px; padding: 25px; background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01)); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); transform-style: preserve-3d; transition: transform 0.3s ease; position: relative; display: flex; flex-direction: column; }
+        .main-content { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; }
         
-        .question-title { font-size: 1.2rem; margin-bottom: 30px; line-height: 1.5; transform: translateZ(30px); /* 3D 浮雕文字 */ }
+        .question-container { background: var(--card); border-radius: 20px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); transition: all 0.3s ease; }
+        .progress { font-size: 0.85rem; color: #9ca3af; margin-bottom: 12px; font-weight: 600; }
+        .q-title { font-size: 1.25rem; font-weight: 600; line-height: 1.5; margin-bottom: 24px; }
         
-        .options { display: flex; flex-direction: column; gap: 15px; flex: 1; transform: translateZ(20px); }
-        .option-btn { background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(0, 243, 255, 0.3); color: white; padding: 15px; border-radius: 10px; font-size: 1rem; text-align: left; transition: all 0.2s; position: relative; overflow: hidden; }
-        .option-btn:active { transform: scale(0.98); }
-        .option-btn.selected { background: rgba(0, 243, 255, 0.2); border-color: var(--primary); box-shadow: 0 0 15px rgba(0, 243, 255, 0.4); }
-        
-        .submit-btn { margin-top: 20px; padding: 15px; border: none; border-radius: 10px; background: linear-gradient(45deg, var(--primary), var(--secondary)); color: white; font-size: 1.2rem; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; box-shadow: 0 0 20px rgba(188, 19, 254, 0.5); transition: 0.3s; transform: translateZ(40px); }
-        .submit-btn:active { transform: translateZ(20px) scale(0.95); }
-        .submit-btn:disabled { background: #333; color: #666; box-shadow: none; transform: none; }
+        .options-list { display: flex; flex-direction: column; gap: 12px; }
+        .opt-btn { background: rgba(255,255,255,0.05); border: 2px solid transparent; color: var(--text); padding: 16px; border-radius: 14px; font-size: 1rem; text-align: left; transition: all 0.2s; outline: none; }
+        .opt-btn:active { transform: scale(0.98); }
+        .opt-btn.active { background: rgba(59, 130, 246, 0.1); border-color: var(--primary); }
 
-        /* 底部弹幕输入区 */
-        .danmaku-bar { display: flex; padding: 15px 20px; background: rgba(0,0,0,0.8); border-top: 1px solid rgba(255,255,255,0.1); padding-bottom: calc(15px + env(safe-area-inset-bottom)); }
-        .danmaku-input { flex: 1; background: rgba(255,255,255,0.1); border: none; padding: 12px 20px; border-radius: 20px; color: white; outline: none; transition: 0.3s; }
-        .danmaku-input:focus { background: rgba(255,255,255,0.2); box-shadow: 0 0 10px rgba(255,255,255,0.2); }
-        .send-btn { background: transparent; border: none; color: var(--primary); font-weight: bold; padding: 0 15px; font-size: 1rem; }
+        .submit-btn { margin-top: 30px; background: var(--primary); color: white; border: none; padding: 16px; border-radius: 14px; font-size: 1.1rem; font-weight: 600; transition: 0.2s; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4); opacity: 0.5; pointer-events: none; }
+        .submit-btn.ready { opacity: 1; pointer-events: auto; }
+        .submit-btn.ready:active { background: var(--primary-hover); transform: scale(0.98); }
 
-        /* 提交成功后的蒙层 */
-        #success-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; display: none; flex-direction: column; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.5s; }
-        #success-overlay h1 { color: var(--primary); font-size: 3rem; text-shadow: 0 0 20px var(--primary); margin: 0; }
-        #success-overlay p { color: #ccc; margin-top: 10px; }
+        /* 弹幕栏 */
+        .bottom-bar { background: var(--card); padding: 12px 20px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); display: flex; gap: 12px; border-top: 1px solid rgba(255,255,255,0.05); }
+        .dm-input { flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 12px 16px; border-radius: 20px; font-size: 1rem; outline: none; transition: 0.2s; }
+        .dm-input:focus { border-color: var(--primary); }
+        .send-btn { background: transparent; color: var(--primary); border: none; font-weight: 600; font-size: 1rem; padding: 0 10px; }
+
+        /* 完成界面 */
+        #done-screen { display: none; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; }
+        #done-screen h2 { font-size: 2rem; margin-bottom: 10px; }
+        #done-screen p { color: #9ca3af; }
     </style>
 </head>
 <body>
-    <div class="status-bar">
-        <span class="status-dot" id="status-indicator"></span>
-        <span id="status-text">Connecting to Screen...</span>
+    <div class="header">
+        <div style="font-weight: 700; letter-spacing: 1px;">SHIMANO</div>
+        <div class="status"><div class="dot" id="dot"></div><span id="status-text">Connecting</span></div>
     </div>
 
-    <div class="question-card" id="card">
-        <div class="question-title">1. 本次 Shimano 研讨会项目中，企业的核心转型方向是？</div>
-        <div class="options" id="options-container">
-            <button class="option-btn" data-val="A">A. 纯硬件制造</button>
-            <button class="option-btn" data-val="B">B. 数字化与生态构建</button>
-            <button class="option-btn" data-val="C">C. 放弃自行车业务</button>
-            <button class="option-btn" data-val="D">D. 降价促销策略</button>
+    <div class="main-content">
+        <!-- 答题卡片区 -->
+        <div class="question-container" id="q-card">
+            <div class="progress" id="q-progress">Question 1 of 3</div>
+            <div class="q-title" id="q-title">正在加载题目...</div>
+            <div class="options-list" id="opt-container">
+                <!-- 选项由 JS 动态生成 -->
+            </div>
+            <button class="submit-btn" id="submit-btn" onclick="submitAnswer()">确认提交</button>
         </div>
-        <button class="submit-btn" id="submit-btn" disabled>SUBMIT</button>
+
+        <!-- 答题完成提示区 -->
+        <div id="done-screen">
+            <h2>🎉 答题完成</h2>
+            <p>感谢您的参与！请看大屏幕统计结果。</p>
+        </div>
     </div>
 
-    <div class="danmaku-bar">
-        <input type="text" class="danmaku-input" id="dm-input" placeholder="发送炫酷弹幕...">
-        <button class="send-btn" onclick="sendDanmaku()">发送</button>
-    </div>
-
-    <div id="success-overlay">
-        <h1>SUCCESS</h1>
-        <p>答案已传送至中控</p>
+    <div class="bottom-bar">
+        <input type="text" id="dm-input" class="dm-input" placeholder="输入弹幕参与讨论...">
+        <button class="send-btn" onclick="sendDM()">发送</button>
     </div>
 
     <script>
-        // === UI 交互逻辑 ===
+        // === 题库配置 (你可以随便增加或修改) ===
+        const questions = [
+            { id: 1, title: "本次 Shimano 研讨会项目中，企业的核心转型方向是？", options: [{val: 'A', text: "A. 纯硬件制造"}, {val: 'B', text: "B. 数字化与生态构建"}, {val: 'C', text: "C. 放弃自行车业务"}, {val: 'D', text: "D. 降价促销策略"}] },
+            { id: 2, title: "在 Shimano 产品生态圈构建中，哪项平台技术起到了关键的数据链接作用？", options: [{val: 'A', text: "A. E-TUBE 平台"}, {val: 'B', text: "B. 传统机械变速研发"}, {val: 'C', text: "C. 碳纤维成型技术"}, {val: 'D', text: "D. 气动风洞测试"}] },
+            { id: 3, title: "未来智慧出行的主要商业模式，以下哪项不在 Shimano 的重点布局中？", options: [{val: 'A', text: "A. 硬件一次性买卖"}, {val: 'B', text: "B. 骑行数据追踪"}, {val: 'C', text: "C. 智能零配件维保"}, {val: 'D', text: "D. 纯外卖配送服务"}] }
+        ];
+
+        let currentIndex = 0;
         let selectedOption = null;
-        const options = document.querySelectorAll('.option-btn');
-        const submitBtn = document.getElementById('submit-btn');
 
-        options.forEach(btn => {
-            btn.addEventListener('click', () => {
-                options.forEach(b => b.classList.remove('selected'));
-                btn.classList.add('selected');
-                selectedOption = btn.getAttribute('data-val');
-                submitBtn.disabled = false;
+        // 渲染题目函数
+        function renderQuestion() {
+            if (currentIndex >= questions.length) {
+                document.getElementById('q-card').style.display = 'none';
+                document.getElementById('done-screen').style.display = 'flex';
+                return;
+            }
+            
+            const q = questions[currentIndex];
+            document.getElementById('q-progress').innerText = `Question ${currentIndex + 1} of ${questions.length}`;
+            document.getElementById('q-title').innerText = q.title;
+            
+            const container = document.getElementById('opt-container');
+            container.innerHTML = ''; // 清空上一题选项
+            selectedOption = null;
+            document.getElementById('submit-btn').classList.remove('ready');
+
+            q.options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = 'opt-btn';
+                btn.innerText = opt.text;
+                btn.onclick = () => {
+                    // 处理选中状态
+                    document.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    selectedOption = opt.val;
+                    document.getElementById('submit-btn').classList.add('ready');
+                };
+                container.appendChild(btn);
             });
-        });
+        }
 
-        // 卡片 3D 陀螺仪倾斜效果 (使用触摸移动模拟)
-        const card = document.getElementById('card');
-        document.addEventListener('touchmove', (e) => {
-            const touch = e.touches[0];
-            const xAxis = (window.innerWidth / 2 - touch.pageX) / 25;
-            const yAxis = (window.innerHeight / 2 - touch.pageY) / 25;
-            card.style.transform = `rotateY(${xAxis}deg) rotateX(${yAxis}deg)`;
-        });
-        document.addEventListener('touchend', () => {
-            card.style.transform = `rotateY(0deg) rotateX(0deg)`;
-        });
+        // 初始化渲染第一题
+        renderQuestion();
 
-        // === PeerJS 通信逻辑 ===
-        const peer = new Peer(); 
+        // === WebRTC 通信逻辑 ===
         let conn = null;
-
+        const peer = new Peer({ config: { 'iceServers': [
+            { urls: 'stun:stun.l.google.com:19302' },
+            // ⚠️ 注意：在这里填入你的 credential 密码
+            { urls: 'turn:global.relay.metered.ca:80', username: '79db8zc5fvuk', credential: '在此填入Secret' }
+        ]}});
+        
         peer.on('open', () => {
-            // 连接大屏固定 ID
-            conn = peer.connect('screen-master-888');
+            // 必须与大屏端的 ID 保持一致！
+            conn = peer.connect('bjtu-shimano-screen');
             conn.on('open', () => {
-                document.getElementById('status-indicator').classList.add('online');
+                document.getElementById('dot').classList.add('online');
                 document.getElementById('status-text').innerText = 'Connected';
             });
         });
 
-        // 发送弹幕
-        function sendDanmaku() {
-            const input = document.getElementById('dm-input');
-            const text = input.value.trim();
-            if(text && conn && conn.open) {
-                conn.send({ type: 'danmaku', content: text });
-                input.value = '';
+        // 提交答案逻辑
+        function submitAnswer() {
+            if(selectedOption && conn && conn.open) {
+                // 将答案发给大屏
+                conn.send({ type: 'answer', option: selectedOption, qId: questions[currentIndex].id });
+                
+                // 撒花特效
+                confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#3b82f6', '#10b981', '#ffffff'] });
+                
+                // 延迟 0.8 秒后自动进入下一题
+                setTimeout(() => {
+                    currentIndex++;
+                    renderQuestion();
+                }, 800);
             }
         }
 
-        // 提交答题与炫酷动画
-        submitBtn.addEventListener('click', () => {
-            if(selectedOption && conn && conn.open) {
-                // 发送数据
-                conn.send({ type: 'answer', option: selectedOption });
-                
-                // 触发炫酷 UI 反馈
-                const overlay = document.getElementById('success-overlay');
-                overlay.style.display = 'flex';
-                setTimeout(() => overlay.style.opacity = '1', 10);
-                
-                // Canvas Confetti 粒子爆炸特效
-                confetti({
-                    particleCount: 150,
-                    spread: 100,
-                    origin: { y: 0.6 },
-                    colors: ['#00f3ff', '#bc13fe', '#ffffff']
-                });
-
-                // 2秒后重置
-                setTimeout(() => {
-                    overlay.style.opacity = '0';
-                    setTimeout(() => overlay.style.display = 'none', 500);
-                    options.forEach(b => b.classList.remove('selected'));
-                    submitBtn.disabled = true;
-                    selectedOption = null;
-                }, 2500);
+        // 发送弹幕逻辑
+        function sendDM() {
+            const input = document.getElementById('dm-input');
+            const val = input.value.trim();
+            if(val && conn && conn.open) { 
+                conn.send({ type: 'danmaku', content: val }); 
+                input.value = ''; 
             }
-        });
+        }
     </script>
 </body>
 </html>

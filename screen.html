@@ -2,171 +2,123 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>3D 赛博中控大屏</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <title>Live Dashboard | Shimano</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        :root {
-            --neon-blue: #00f3ff;
-            --neon-purple: #bc13fe;
-            --glass-bg: rgba(10, 15, 30, 0.4);
-        }
-        body, html { margin: 0; padding: 0; overflow: hidden; background: #000; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
+        :root { --bg: #050505; --panel: rgba(255,255,255,0.03); --border: rgba(255,255,255,0.08); --primary: #3b82f6; --text: #fff; }
+        body, html { margin: 0; padding: 0; background: #000; background-image: radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.15), transparent 25%), radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.15), transparent 25%); color: var(--text); font-family: -apple-system, sans-serif; overflow: hidden; height: 100vh; }
         
-        .dashboard { display: grid; grid-template-columns: 300px 1fr 300px; gap: 20px; padding: 30px; height: 100vh; box-sizing: border-box; pointer-events: none; }
-        .panel { background: var(--glass-bg); backdrop-filter: blur(10px); border: 1px solid rgba(0, 243, 255, 0.3); border-radius: 15px; padding: 20px; box-shadow: 0 0 20px rgba(0, 243, 255, 0.1); position: relative; overflow: hidden; pointer-events: auto; }
-        .panel::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 2px; background: linear-gradient(90deg, transparent, var(--neon-blue), transparent); }
+        .layout { display: grid; grid-template-columns: 350px 1fr 400px; gap: 24px; padding: 32px; height: 100vh; box-sizing: border-box; position: relative; z-index: 10; pointer-events: none; }
+        .glass-panel { background: var(--panel); border: 1px solid var(--border); border-radius: 24px; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); padding: 24px; display: flex; flex-direction: column; pointer-events: auto; }
         
-        h2 { margin-top: 0; color: var(--neon-blue); text-shadow: 0 0 10px var(--neon-blue); font-weight: 300; letter-spacing: 2px; text-transform: uppercase; }
+        h3 { font-size: 1.2rem; font-weight: 500; color: #9ca3af; margin: 0 0 20px 0; letter-spacing: 1px; text-transform: uppercase; }
         
-        /* 倒计时样式 */
-        .countdown { font-size: 4rem; font-weight: bold; text-align: center; color: var(--neon-purple); text-shadow: 0 0 20px var(--neon-purple); }
-        
-        /* 弹幕容器 */
-        #danmaku-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 100; overflow: hidden; }
-        .danmaku-item { position: absolute; white-space: nowrap; font-size: 28px; font-weight: bold; text-shadow: 2px 2px 4px #000; animation: slide linear forwards; }
-        @keyframes slide { from { transform: translateX(100vw); } to { transform: translateX(-100%); } }
+        .stat-box { margin-bottom: 20px; }
+        .stat-value { font-size: 2.5rem; font-weight: 700; color: #fff; }
+        .stat-label { font-size: 0.9rem; color: #6b7280; }
 
-        /* 布局占位 */
-        .left-col { display: flex; flex-direction: column; gap: 20px; }
-        .right-col { display: flex; flex-direction: column; gap: 20px; }
-        .center-col { display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding-top: 50px;}
-        
-        .qr-placeholder { width: 100%; height: 200px; background: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,243,255,0.1) 10px, rgba(0,243,255,0.1) 20px); border: 2px dashed var(--neon-blue); display: flex; align-items: center; justify-content: center; }
+        .timer { font-size: 6rem; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; background: linear-gradient(to bottom, #fff, #9ca3af); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .center-area { display: flex; flex-direction: column; justify-content: center; align-items: center; }
+
+        /* 弹幕系统 */
+        #danmaku-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 50; overflow: hidden; }
+        .danmaku-msg { position: absolute; white-space: nowrap; font-size: 32px; font-weight: 600; color: #fff; text-shadow: 0 4px 12px rgba(0,0,0,0.8); animation: slideLeft linear forwards; }
+        @keyframes slideLeft { from { transform: translateX(100vw); } to { transform: translateX(-100%); } }
     </style>
 </head>
 <body>
-    <div id="canvas-container"></div>
-    
-    <div id="danmaku-container"></div>
+    <!-- 全屏弹幕层 -->
+    <div id="danmaku-layer"></div>
 
-    <div class="dashboard">
-        <div class="left-col">
-            <div class="panel">
-                <h2>System Status</h2>
-                <p>Connection: <span style="color:#0f0">Online</span></p>
-                <p>Connected Users: <span id="user-count" style="color:var(--neon-blue); font-size: 1.5em;">0</span></p>
-                <p>Peer ID: <span id="my-id" style="font-size: 0.8em; color: gray;">Initializing...</span></p>
+    <div class="layout">
+        <!-- 左侧：系统状态 -->
+        <div class="glass-panel">
+            <h3>System Status</h3>
+            <div class="stat-box">
+                <div class="stat-label">Connection State</div>
+                <div class="stat-value" style="color: #34d399; font-size: 1.5rem; margin-top: 5px;">● Online</div>
             </div>
-            <div class="panel" style="flex-grow: 1;">
-                <h2>Scan to Join</h2>
-                <div class="qr-placeholder">QR Code Here</div>
-                <p style="text-align: center; margin-top: 10px; font-size: 0.9em; color: #aaa;">扫码进入答题端</p>
+            <div class="stat-box">
+                <div class="stat-label">Connected Devices</div>
+                <div class="stat-value" id="user-count">0</div>
+            </div>
+            <div class="stat-box" style="margin-top: auto;">
+                <div class="stat-label">Peer ID (Gateway)</div>
+                <div style="font-family: monospace; color: #9ca3af; margin-top: 5px;" id="my-id">Initializing...</div>
             </div>
         </div>
 
-        <div class="center-col">
-            <div class="countdown" id="timer">05:00</div>
-            <div style="width: 80%; height: 200px; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3);">扩展内容预留区</div>
+        <!-- 中间：核心展示区 -->
+        <div class="center-area">
+            <div style="font-size: 1.5rem; color: #6b7280; margin-bottom: -20px;">TIME REMAINING</div>
+            <div class="timer">05:00</div>
         </div>
 
-        <div class="right-col">
-            <div class="panel" style="height: 300px;">
-                <h2>Live Stats</h2>
-                <canvas id="statsChart"></canvas>
-            </div>
-            <div class="panel" style="flex-grow: 1;">
-                <h2>Recent Activity</h2>
-                <ul id="activity-log" style="list-style: none; padding: 0; font-size: 0.9em; color: #ccc; line-height: 1.8;">
-                    <li>[System] Awaiting connections...</li>
-                </ul>
+        <!-- 右侧：实时数据统计 -->
+        <div class="glass-panel">
+            <h3>Live Responses</h3>
+            <div style="flex: 1; position: relative;">
+                <canvas id="liveChart"></canvas>
             </div>
         </div>
     </div>
 
     <script>
-        // === 1. 初始化 Three.js 炫酷 3D 粒子星空 ===
-        function init3DBackground() {
-            const container = document.getElementById('canvas-container');
-            const scene = new THREE.Scene();
-            scene.fog = new THREE.FogExp2(0x000000, 0.001);
-            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 2000);
-            camera.position.z = 1000;
-            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            container.appendChild(renderer.domElement);
-
-            const geometry = new THREE.BufferGeometry();
-            const vertices = [];
-            for ( let i = 0; i < 2000; i ++ ) {
-                vertices.push( (Math.random() - 0.5) * 2000, (Math.random() - 0.5) * 2000, (Math.random() - 0.5) * 2000 );
-            }
-            geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
-            const material = new THREE.PointsMaterial({ color: 0x00f3ff, size: 2, transparent: true, opacity: 0.8 });
-            const particles = new THREE.Points(geometry, material);
-            scene.add(particles);
-
-            function animate() {
-                requestAnimationFrame(animate);
-                particles.rotation.x += 0.0005;
-                particles.rotation.y += 0.001;
-                renderer.render(scene, camera);
-            }
-            animate();
-            window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
-        }
-        init3DBackground();
-
-        // === 2. 初始化 Chart.js 数据图表 ===
-        const ctx = document.getElementById('statsChart').getContext('2d');
+        // 1. 初始化优雅的柱状图
+        const ctx = document.getElementById('liveChart').getContext('2d');
         const chart = new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: ['A', 'B', 'C', 'D'],
+                labels: ['Option A', 'Option B', 'Option C', 'Option D'],
                 datasets: [{
-                    label: 'Answers',
                     data: [0, 0, 0, 0],
-                    backgroundColor: ['rgba(0, 243, 255, 0.6)', 'rgba(188, 19, 254, 0.6)', 'rgba(255, 99, 132, 0.6)', 'rgba(255, 206, 86, 0.6)'],
-                    borderColor: ['#00f3ff', '#bc13fe', '#ff6384', '#ffce56'],
-                    borderWidth: 1
+                    backgroundColor: ['rgba(59, 130, 246, 0.8)', 'rgba(139, 92, 246, 0.8)', 'rgba(236, 72, 153, 0.8)', 'rgba(16, 185, 129, 0.8)'],
+                    borderRadius: 8,
+                    borderSkipped: false
                 }]
             },
-            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#fff' } }, x: { grid: { display: false }, ticks: { color: '#fff' } } }, plugins: { legend: { display: false } } }
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af', stepSize: 1 } }, x: { grid: { display: false }, ticks: { color: '#9ca3af', font: { size: 14 } } } } }
         });
 
-        // === 3. 弹幕发射逻辑 ===
-        const colors = ['#ffffff', '#00f3ff', '#bc13fe', '#ffff00', '#ff0055'];
-        function shootDanmaku(text) {
-            const container = document.getElementById('danmaku-container');
+        // 2. 发送弹幕逻辑
+        function fireDanmaku(text) {
             const el = document.createElement('div');
-            el.className = 'danmaku-item';
+            el.className = 'danmaku-msg';
             el.innerText = text;
-            el.style.top = Math.random() * 80 + '%';
-            el.style.color = colors[Math.floor(Math.random() * colors.length)];
-            const duration = Math.random() * 3 + 4; // 4-7秒
+            el.style.top = (Math.random() * 70 + 10) + '%'; 
+            const duration = Math.random() * 3 + 5; // 5-8秒飘过
             el.style.animationDuration = duration + 's';
-            container.appendChild(el);
+            document.getElementById('danmaku-layer').appendChild(el);
             setTimeout(() => el.remove(), duration * 1000);
         }
 
-        // === 4. PeerJS 连接与数据处理 ===
-        const peer = new Peer('screen-master-888', { debug: 2 }); // 固定大屏ID
-        peer.on('open', (id) => { document.getElementById('my-id').innerText = id; });
-        
-        let connectedUsers = 0;
-        peer.on('connection', (conn) => {
-            connectedUsers++;
-            document.getElementById('user-count').innerText = connectedUsers;
-            
-            conn.on('data', (data) => {
+        // 3. WebRTC 连接逻辑 (请勿更改此固定房间号 bjtu-shimano-screen)
+        const peer = new Peer('bjtu-shimano-screen', {
+            config: { 'iceServers': [
+                { urls: 'stun:stun.l.google.com:19302' },
+                // ⚠️ 注意：在这里填入你的 credential 密码
+                { urls: 'turn:global.relay.metered.ca:80', username: '79db8zc5fvuk', credential: '在此填入Secret' }
+            ]},
+            debug: 2
+        });
+
+        let users = 0;
+        peer.on('open', id => document.getElementById('my-id').innerText = id);
+        peer.on('connection', conn => {
+            users++; document.getElementById('user-count').innerText = users;
+            conn.on('data', data => {
                 if(data.type === 'danmaku') {
-                    shootDanmaku(data.content);
+                    fireDanmaku(data.content);
                 } else if(data.type === 'answer') {
-                    // 更新图表
-                    const optionIndex = ['A', 'B', 'C', 'D'].indexOf(data.option);
-                    if(optionIndex !== -1) {
-                        chart.data.datasets[0].data[optionIndex]++;
-                        chart.update();
-                        
-                        // 更新活动日志
-                        const log = document.getElementById('activity-log');
-                        log.innerHTML = `<li>[Answer] User picked ${data.option}</li>` + log.innerHTML;
+                    const idx = ['A', 'B', 'C', 'D'].indexOf(data.option);
+                    if(idx !== -1) { 
+                        chart.data.datasets[0].data[idx]++; 
+                        chart.update(); 
                     }
                 }
             });
-            conn.on('close', () => { connectedUsers--; document.getElementById('user-count').innerText = connectedUsers; });
+            conn.on('close', () => { users--; document.getElementById('user-count').innerText = users; });
         });
     </script>
 </body>
