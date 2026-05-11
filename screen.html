@@ -2,179 +2,283 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>高塔心理学 | 涅奥的观测枢纽</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>明晰之境 | 情绪监测网</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
-        /* 尖塔暗黑风格流体背景 */
-        body, html { margin: 0; padding: 0; height: 100vh; overflow: hidden; font-family: "Microsoft YaHei", -apple-system, sans-serif; 
-            background: linear-gradient(-45deg, #1a0f14, #1c192e, #0d1b2a, #1a0f14); background-size: 400% 400%; animation: gradientBG 20s ease infinite; color: #e2e8f0; }
-        @keyframes gradientBG { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+        /* 亮色科技风配色变量 */
+        :root { 
+            --primary: #3b82f6; /* 科技蓝 */
+            --accent: #8b5cf6;  /* 灵动紫 */
+            --bg: #f0f4f8;      /* 浅灰蓝背景 */
+            --panel: rgba(255, 255, 255, 0.65); /* 毛玻璃白 */
+            --border: rgba(255, 255, 255, 0.8);
+            --text-dark: #0f172a;
+            --text-muted: #64748b;
+        }
+        
+        body, html { margin: 0; padding: 0; height: 100vh; overflow: hidden; background: var(--bg); font-family: "PingFang SC", "Microsoft YaHei", sans-serif; color: var(--text-dark); }
 
-        /* 黑曜石玻璃面板 */
-        .layout { display: grid; grid-template-columns: 350px 1fr 350px; gap: 20px; padding: 20px; height: 100vh; box-sizing: border-box; position: relative; z-index: 10; pointer-events: none; }
-        .glass-panel { background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 215, 0, 0.2); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); border-radius: 16px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: 20px; display: flex; flex-direction: column; pointer-events: auto; overflow: hidden;}
-        
-        h3 { font-size: 1.1rem; font-weight: 700; color: #fbbf24; margin: 0 0 15px 0; display: flex; justify-content: space-between; text-shadow: 0 2px 4px rgba(0,0,0,0.8);}
-        
-        /* 顶部状态条 */
-        .top-status { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(251, 191, 36, 0.4); padding: 10px 30px; border-radius: 30px; display: flex; gap: 30px; font-weight: bold; box-shadow: 0 5px 20px rgba(0,0,0,0.6); z-index: 20; pointer-events: auto; color: #e2e8f0;}
-        
-        .chart-box { flex: 1; min-height: 200px; margin-bottom: 20px; position: relative; }
-        
-        /* 涅奥与四勇士区 */
-        .dance-floor { height: 120px; display: flex; justify-content: center; align-items: flex-end; gap: 25px; border-bottom: 2px solid rgba(251, 191, 36, 0.3); padding-bottom: 10px; margin-bottom: 20px; margin-top: 60px;}
-        .dancer { font-size: 4rem; animation: float 3s ease-in-out infinite; transform-origin: bottom center; filter: drop-shadow(0 0 15px rgba(251, 191, 36, 0.3));}
-        .dancer:nth-child(1) { animation-delay: 0s; font-size: 5rem;} /* 涅奥 */
-        .dancer:nth-child(2) { animation-delay: 0.5s; } /* 战士 */
-        .dancer:nth-child(3) { animation-delay: 1.0s; } /* 猎手 */
-        .dancer:nth-child(4) { animation-delay: 1.5s; } /* 机器人 */
-        .dancer:nth-child(5) { animation-delay: 2.0s; } /* 观者 */
-        
-        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+        /* 浅色流体背景动画 */
+        .animated-bg {
+            position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: -1;
+            background: radial-gradient(circle at 15% 20%, rgba(59,130,246,0.1) 0%, transparent 40%),
+                        radial-gradient(circle at 85% 80%, rgba(139,92,246,0.1) 0%, transparent 40%);
+            animation: pulseBg 12s ease-in-out infinite alternate;
+        }
+        @keyframes pulseBg { 0% { opacity: 0.6; } 100% { opacity: 1; } }
 
-        /* 篝火心声瀑布流 */
-        .sub-answers-feed { flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 10px; padding: 5px;}
-        .sub-card { background: rgba(30, 41, 59, 0.8); border-left: 4px solid #fbbf24; padding: 15px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); animation: popIn 0.4s forwards; }
-        .sub-card .author { font-size: 0.85rem; color: #fbbf24; font-weight: 700; margin-bottom: 5px; }
-        @keyframes popIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .layout { display: flex; justify-content: space-between; padding: 30px; height: 100vh; box-sizing: border-box; position: relative; z-index: 10;}
 
-        /* 高塔弹幕 */
-        #danmaku-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 100; overflow: hidden; }
-        .danmaku-msg { position: absolute; white-space: nowrap; font-size: 36px; font-weight: 900; color: #fff; text-shadow: 0 0 10px #000, 2px 2px 4px #000; animation: slideLeft linear forwards; display: flex; align-items: center; gap: 12px; }
-        .dm-tag { font-size: 20px; background: rgba(251, 191, 36, 0.9); color: #0f172a; padding: 5px 15px; border-radius: 5px; text-shadow: none; font-weight: bold;}
+        /* 明亮玻璃拟物化面板 */
+        .side-panel { 
+            width: 360px; height: 100%; display: flex; flex-direction: column;
+            background: var(--panel); border: 1px solid var(--border); border-radius: 24px; 
+            backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); 
+            padding: 25px; box-sizing: border-box; box-shadow: 0 15px 35px rgba(0,0,0,0.05);
+            z-index: 20;
+        }
+
+        h2 { font-size: 1.1rem; color: var(--text-muted); margin: 0 0 20px 0; letter-spacing: 2px; text-transform: uppercase; border-bottom: 2px solid rgba(0,0,0,0.05); padding-bottom: 10px; display: flex; justify-content: space-between; font-weight: 700;}
+        h2 span { color: var(--primary); }
+
+        .stat-block { margin-bottom: 25px; }
+        .big-number { font-size: 3rem; font-weight: 900; color: var(--text-dark); margin-bottom: 2px; line-height: 1; letter-spacing: 1px;}
+        .sub-label { font-size: 0.8rem; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; font-weight: 600;}
+
+        /* 左下角小巧的二维码区域 */
+        .qr-section { margin-top: auto; background: rgba(255,255,255,0.8); border-radius: 16px; padding: 15px; display: flex; align-items: center; gap: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.03);}
+        .qr-section img { width: 90px; height: 90px; border-radius: 8px;}
+        .qr-text { font-size: 0.85rem; color: var(--text-muted); line-height: 1.5; font-weight: 600;}
+        .timer-small { font-size: 1.8rem; font-weight: bold; background: linear-gradient(90deg, var(--primary), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-top: 5px; font-family: monospace;}
+
+        /* --- 中央视觉中心 --- */
+        .center-stage { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 700px; height: 700px; display: flex; align-items: center; justify-content: center; z-index: 5;
+        }
+        
+        /* 浅色旋转光环 */
+        .hud-ring { position: absolute; border-radius: 50%; border: 1px solid transparent; }
+        .ring-1 { width: 550px; height: 550px; border-top: 2px solid var(--primary); border-bottom: 2px solid var(--primary); animation: spin 20s linear infinite; opacity: 0.2;}
+        .ring-2 { width: 500px; height: 500px; border-left: 2px dashed var(--accent); border-right: 2px dashed var(--accent); animation: spin 15s linear infinite reverse; opacity: 0.3;}
+        .ring-3 { width: 420px; height: 420px; border: 1px solid rgba(0,0,0,0.05); background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, transparent 70%); box-shadow: 0 0 50px rgba(59,130,246,0.1); }
+        
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* 中间的 Canvas 神经元 */
+        #neural-canvas { position: absolute; width: 420px; height: 420px; border-radius: 50%; z-index: 10; transition: transform 0.2s, filter 0.2s;}
+        
+        /* 中间的静态标签 */
+        .core-label { position: absolute; z-index: 20; text-align: center; pointer-events: none; transition: opacity 0.3s;}
+        .core-label h1 { margin: 0; font-size: 1.5rem; letter-spacing: 8px; color: var(--text-dark); font-weight: 800;}
+        .core-label p { margin: 5px 0 0 0; color: var(--primary); font-size: 0.9rem; letter-spacing: 4px; font-weight: bold;}
+
+        /* --- 全息情绪标签 (带散列随机偏移量) --- */
+        .core-burst-label {
+            position: absolute; z-index: 50; padding: 12px 25px;
+            background: rgba(255, 255, 255, 0.95); border: 2px solid var(--primary); border-radius: 30px;
+            color: var(--primary); font-size: 1.2rem; font-weight:800; letter-spacing: 2px;
+            box-shadow: 0 10px 25px rgba(59, 130, 246, 0.2);
+            pointer-events: none; opacity: 0; 
+            /* 使用 CSS 变量实现散列爆破 */
+            transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(0.5);
+            animation: energyBurst 2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        @keyframes energyBurst {
+            0% { opacity: 0; transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(0.5); }
+            15% { opacity: 1; transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(1); }
+            70% { opacity: 1; transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(1); }
+            100% { opacity: 0; transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty) - 30px)) scale(0.9); }
+        }
+
+        /* 实时倾向排行列表 */
+        .stats-list { flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 12px; }
+        .stat-item { display: flex; align-items: center; background: rgba(255,255,255,0.8); padding: 12px 15px; border-radius: 12px; transition: all 0.3s ease; box-shadow: 0 2px 5px rgba(0,0,0,0.02);}
+        .stat-name { width: 100px; font-size: 0.95rem; font-weight: 600; color: var(--text-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+        .stat-bar-bg { flex: 1; height: 8px; background: rgba(0,0,0,0.05); border-radius: 4px; margin: 0 15px; overflow: hidden;}
+        .stat-bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--accent)); width: 0%; transition: width 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .stat-count { font-size: 1.1rem; font-weight: 800; color: var(--primary); width: 30px; text-align: right; }
+
+        /* 浅色弹幕 */
+        #danmaku-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 100; overflow: hidden;}
+        .danmaku { position: absolute; white-space: nowrap; font-size: 26px; font-weight: 800; color: rgba(15,23,42,0.4); animation: slideLeft linear forwards; }
         @keyframes slideLeft { from { transform: translateX(100vw); } to { transform: translateX(-100%); } }
     </style>
 </head>
 <body>
-    <div id="danmaku-layer"></div>
+    <div class="animated-bg"></div>
+    <div id="danmaku-container"></div>
 
-    <div class="top-status">
-        <div style="color:#22c55e">📡 尖塔连接 (<span id="my-id">...</span>)</div>
-        <div>👥 挑战者: <span id="user-count" style="color:#fbbf24; font-size:1.2em;">0</span></div>
-        <div>⏳ 倒计时: <span id="countdown" style="color:#ef4444; font-size:1.2em;">05:00</span></div>
+    <div class="center-stage" id="center-stage">
+        <div class="hud-ring ring-1"></div>
+        <div class="hud-ring ring-2"></div>
+        <div class="hud-ring ring-3"></div>
+        <canvas id="neural-canvas" width="420" height="420"></canvas>
+        <div class="core-label" id="static-label">
+            <h1>EMOTION CORE</h1>
+            <p id="core-status">SYNCING...</p>
+        </div>
     </div>
 
     <div class="layout">
-        <!-- 左侧图表 -->
-        <div class="glass-panel">
-            <h3>Q1. 涅奥的赐福选择 <span style="font-size:0.8em; color:#64748b">Bar</span></h3>
-            <div class="chart-box"><canvas id="chartQ1"></canvas></div>
-            
-            <h3>Q2. 遭遇地精大块头 <span style="font-size:0.8em; color:#64748b">Doughnut</span></h3>
-            <div class="chart-box"><canvas id="chartQ2"></canvas></div>
-        </div>
-
-        <!-- 中间：涅奥区 + 篝火心声 -->
-        <div class="glass-panel" style="background: rgba(15, 23, 42, 0.4);">
-            <div class="dance-floor">
-                <div class="dancer" title="涅奥">🐋</div>
-                <div class="dancer" title="铁甲战士">🛡️</div>
-                <div class="dancer" title="静默猎手">🗡️</div>
-                <div class="dancer" title="故障机器人">🔮</div>
-                <div class="dancer" title="观者">👁️</div>
+        <div class="side-panel">
+            <h2>SYS_STATUS <span>//</span></h2>
+            <div class="stat-block">
+                <div class="big-number" id="total-count">0</div>
+                <div class="sub-label">已捕获潜意识碎片 (Fragments)</div>
             </div>
-            
-            <h3 style="justify-content: center; font-size: 1.3rem; color: #f97316;">🔥 篝火营地 (心声墙)</h3>
-            <div class="sub-answers-feed" id="sub-feed">
-                <div style="text-align: center; color: #64748b; margin-top: 20px;">等待挑战者在篝火旁留下信息...</div>
+            <div class="stat-block">
+                <div class="big-number" id="user-count" style="color: var(--accent);">0</div>
+                <div class="sub-label">实时连接终端 (Active Nodes)</div>
+            </div>
+            <div class="qr-section">
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://psychology12.netlify.app/client.html" alt="QR">
+                <div>
+                    <div class="qr-text">扫码接入意识网络<br>直面最真实的自我</div>
+                    <div class="timer-small" id="timer">00:30</div>
+                </div>
             </div>
         </div>
 
-        <!-- 右侧图表 -->
-        <div class="glass-panel">
-            <h3>Q4. 商店的抉择 <span style="font-size:0.8em; color:#64748b">Pie</span></h3>
-            <div class="chart-box"><canvas id="chartQ4"></canvas></div>
-            
-            <h3>Q5. 本命职业倾向 <span style="font-size:0.8em; color:#64748b">Polar</span></h3>
-            <div class="chart-box"><canvas id="chartQ5"></canvas></div>
+        <div class="side-panel">
+            <h2>DATA_ANALYSIS <span>//</span></h2>
+            <div class="stats-list" id="ranking-list">
+                <div style="text-align: center; color: var(--text-muted); margin-top: 150px; font-size: 0.9rem; font-weight: bold;">等待数据样本注入...</div>
+            </div>
         </div>
     </div>
 
     <script>
-        // 战红, 猎绿, 机蓝, 观紫
-        Chart.defaults.color = '#cbd5e1';
-        const classColors = ['rgba(239, 68, 68, 0.85)', 'rgba(34, 197, 94, 0.85)', 'rgba(59, 130, 246, 0.85)', 'rgba(168, 85, 247, 0.85)'];
-        const itemColors = ['rgba(251, 191, 36, 0.8)', 'rgba(248, 113, 113, 0.8)', 'rgba(96, 165, 250, 0.8)', 'rgba(156, 163, 175, 0.8)'];
+        // --- 1. Canvas 浅色神经网络动效 ---
+        const canvas = document.getElementById('neural-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        const particleCount = 50; // 控制在50确保高并发不卡
+        const radius = 210;
 
-        const chartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
-
-        const chartQ1 = new Chart(document.getElementById('chartQ1'), {
-            type: 'bar',
-            data: { labels: ['A.掉血换遗物', 'B.拿100金币', 'C.随机稀有牌', 'D.换初始遗物'], datasets: [{ data: [0,0,0,0], backgroundColor: itemColors, borderRadius: 4 }] },
-            options: { ...chartOptions, scales: { y: { beginAtZero: true, ticks:{stepSize:1}, grid: {color: 'rgba(255,255,255,0.1)'} }, x:{ grid: {display: false} } } }
-        });
-
-        const chartQ2 = new Chart(document.getElementById('chartQ2'), {
-            type: 'doughnut',
-            data: { labels: ['A.狂甩攻击', 'B.叠甲过过', 'C.喝药保命', 'D.SL大法'], datasets: [{ data: [0,0,0,0], backgroundColor: itemColors, borderWidth: 1, borderColor: '#0f172a' }] },
-            options: { ...chartOptions, plugins: { legend: { position: 'right', labels: {color: '#cbd5e1'} } } }
-        });
-
-        const chartQ4 = new Chart(document.getElementById('chartQ4'), {
-            type: 'pie',
-            data: { labels: ['A.删打击防御', 'B.买核心牌', 'C.梭哈遗物', 'D.买血瓶'], datasets: [{ data: [0,0,0,0], backgroundColor: itemColors, borderWidth: 1, borderColor: '#0f172a' }] },
-            options: { ...chartOptions, plugins: { legend: { position: 'right', labels: {color: '#cbd5e1'} } } }
-        });
-
-        // Q5 使用四职业代表色
-        const chartQ5 = new Chart(document.getElementById('chartQ5'), {
-            type: 'polarArea',
-            data: { labels: ['铁甲战士', '静默猎手', '故障机器人', '观者'], datasets: [{ data: [0,0,0,0], backgroundColor: classColors, borderColor: 'rgba(255,255,255,0.2)' }] },
-            options: { ...chartOptions, plugins: { legend: { position: 'right', labels: {color: '#cbd5e1'} } }, scales: { r: { grid: {color: 'rgba(255,255,255,0.1)'}, ticks: {display: false} } } }
-        });
-
-        let timeLeft = 300;
-        setInterval(() => { if(timeLeft > 0) { timeLeft--; document.getElementById('countdown').innerText = `${String(Math.floor(timeLeft/60)).padStart(2,'0')}:${String(timeLeft%60).padStart(2,'0')}`; } }, 1000);
-
-        function fireDanmaku(text, nickname) {
-            const el = document.createElement('div');
-            el.className = 'danmaku-msg';
-            el.innerHTML = `<span class="dm-tag">${nickname}</span> ${text}`;
-            el.style.top = (Math.random() * 70 + 15) + '%'; 
-            el.style.animationDuration = (Math.random() * 4 + 5) + 's';
-            document.getElementById('danmaku-layer').appendChild(el);
-            setTimeout(() => el.remove(), 10000);
+        function initParticles() {
+            for (let i = 0; i < particleCount; i++) {
+                particles.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, vx: (Math.random() - 0.5) * 1.5, vy: (Math.random() - 0.5) * 1.5, size: Math.random() * 2 + 1.5 });
+            }
         }
 
-        const feed = document.getElementById('sub-feed');
-        function addSubjectiveCard(text, nickname) {
-            if(feed.innerText.includes('等待')) feed.innerHTML = '';
-            const el = document.createElement('div');
-            el.className = 'sub-card';
-            el.innerHTML = `<div class="author">📜 猎手 ${nickname}：</div><div style="font-size:1.05rem; font-weight:500;">"${text}"</div>`;
-            feed.prepend(el);
-            if(feed.children.length > 5) feed.lastChild.remove();
+        function drawNeuralNetwork() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.beginPath(); ctx.arc(radius, radius, radius - 10, 0, Math.PI * 2); ctx.clip();
+            ctx.fillStyle = '#3b82f6'; ctx.lineWidth = 0.8;
+            particles.forEach((p, index) => {
+                p.x += p.vx; p.y += p.vy;
+                if (p.x < 0 || p.x > canvas.width) p.vx *= -1; if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+                for (let j = index + 1; j < particles.length; j++) {
+                    const p2 = particles[j]; const dist = Math.hypot(p.x - p2.x, p.y - p2.y);
+                    if (dist < 90) { ctx.strokeStyle = `rgba(59, 130, 246, ${1 - dist/90})`; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p2.x, p2.y); ctx.stroke(); }
+                }
+            });
+            requestAnimationFrame(drawNeuralNetwork);
+        }
+        initParticles();
+        drawNeuralNetwork();
+
+        // 核心脉冲
+        function pulseCore() {
+            canvas.style.transform = 'scale(1.05)';
+            canvas.style.filter = 'drop-shadow(0 0 20px rgba(59,130,246,0.5))';
+            document.getElementById('static-label').style.opacity = '0.2'; 
+            setTimeout(() => { canvas.style.transform = 'scale(1)'; canvas.style.filter = 'none'; document.getElementById('static-label').style.opacity = '1'; }, 200);
         }
 
-        // 修改为尖塔专属 Topic
-        const TOPIC = 'bjtu/spire/room_888'; 
-        const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt'); 
-        let users = new Set(); 
+        // 散射全息标签 (防重叠算法)
+        function showCoreBurst(emotionText) {
+            const stage = document.getElementById('center-stage');
+            const el = document.createElement('div');
+            el.className = 'core-burst-label';
+            el.innerText = `● ${emotionText}`;
+            
+            // 产生随机 XY 偏移，确保 70 人同时发也不会完全挡住
+            const maxOffset = 180;
+            const offsetX = (Math.random() - 0.5) * maxOffset;
+            const offsetY = (Math.random() - 0.5) * maxOffset;
+            el.style.setProperty('--tx', `${offsetX}px`);
+            el.style.setProperty('--ty', `${offsetY}px`);
+            
+            stage.appendChild(el);
+            setTimeout(() => { el.remove(); }, 2000);
+        }
 
-        client.on('connect', () => {
-            document.getElementById('my-id').innerText = TOPIC;
-            client.subscribe(TOPIC); 
-        });
+        // --- 2. 倒计时 ---
+        let sec = 30;
+        const timerEl = document.getElementById('timer');
+        const timerInt = setInterval(() => {
+            if(sec > 0) { sec--; timerEl.innerText = `00:${String(sec).padStart(2,'0')}`; } 
+            else { timerEl.innerText = "LOCKED"; timerEl.style.color = "#ef4444"; document.getElementById('core-status').innerText = "DATA ANALYZING"; clearInterval(timerInt); }
+        }, 1000);
+
+        // --- 3. 节流机制与 MQTT 通信 ---
+        const emotions = ["学业焦虑", "未来迷茫焦虑", "社交焦虑", "经济焦虑", "空虚无聊", "自我否定", "莫名低落", "孤独", "烦躁", "情感内耗", "拖延", "疲惫", "嫉妒", "性压抑", "容貌焦虑"];
+        let dataMap = {};
+        emotions.forEach(e => dataMap[e] = 0);
+
+        const TOPIC = 'bjtu/psycho/energy_field'; 
+        const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt');
+        let connectedUsers = new Set();
+        
+        // 避免高频修改 DOM
+        let needsRankingUpdate = false;
+        setInterval(() => {
+            if (needsRankingUpdate) {
+                updateRankingDOM();
+                document.getElementById('total-count').innerText = Object.values(dataMap).reduce((a,b)=>a+b, 0);
+                needsRankingUpdate = false;
+            }
+        }, 500); // 每 0.5 秒最多重绘一次排行榜
+
+        client.on('connect', () => { client.subscribe(TOPIC); });
 
         client.on('message', (topic, message) => {
             try {
                 const data = JSON.parse(message.toString());
-                if(data.nickname) { users.add(data.nickname); document.getElementById('user-count').innerText = users.size; }
-
-                if(data.type === 'danmaku') fireDanmaku(data.content, data.nickname);
-                else if(data.type === 'answer_obj') {
-                    const idx = ['A', 'B', 'C', 'D'].indexOf(data.option);
-                    if(idx !== -1) { 
-                        if(data.qId === 'q1') { chartQ1.data.datasets[0].data[idx]++; chartQ1.update(); }
-                        if(data.qId === 'q2') { chartQ2.data.datasets[0].data[idx]++; chartQ2.update(); }
-                        if(data.qId === 'q4') { chartQ4.data.datasets[0].data[idx]++; chartQ4.update(); }
-                        if(data.qId === 'q5') { chartQ5.data.datasets[0].data[idx]++; chartQ5.update(); }
-                    }
+                if(data.nickname) { connectedUsers.add(data.nickname); document.getElementById('user-count').innerText = connectedUsers.size; }
+                if(data.type === 'submit_emotion') {
+                    dataMap[data.choice]++;
+                    needsRankingUpdate = true; // 标记需要更新，交由定时器批量处理
+                    
+                    showDanmaku(data.choice); 
+                    pulseCore();
+                    showCoreBurst(data.choice); 
                 }
-                else if(data.type === 'answer_sub') addSubjectiveCard(data.text, data.nickname);
-            } catch (e) {}
+            } catch(e) {}
         });
+
+        function updateRankingDOM() {
+            const listEl = document.getElementById('ranking-list');
+            const sorted = Object.entries(dataMap).filter(item => item[1] > 0).sort((a, b) => b[1] - a[1]).slice(0, 10);
+            if(sorted.length === 0) return;
+            listEl.innerHTML = '';
+            const maxVal = Math.max(...Object.values(dataMap));
+            sorted.forEach(([name, count]) => {
+                const perc = (count / maxVal) * 100;
+                const item = document.createElement('div');
+                item.className = 'stat-item';
+                item.innerHTML = `<div class="stat-name">${name}</div><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${perc}%"></div></div><div class="stat-count">${count}</div>`;
+                listEl.appendChild(item);
+            });
+        }
+
+        // 弹幕池限制（防高并发卡死）
+        let activeDanmaku = 0;
+        const MAX_DANMAKU = 50; 
+        function showDanmaku(text) {
+            if (activeDanmaku >= MAX_DANMAKU) return; // 超过50条在屏则丢弃部分视觉效果
+            activeDanmaku++;
+            const el = document.createElement('div');
+            el.className = 'danmaku';
+            el.innerText = "意识注入: " + text;
+            el.style.top = (Math.random() * 85 + 5) + '%';
+            el.style.animationDuration = (Math.random() * 2 + 5) + 's';
+            document.getElementById('danmaku-container').appendChild(el);
+            setTimeout(() => { el.remove(); activeDanmaku--; }, 7000);
+        }
     </script>
 </body>
 </html>
