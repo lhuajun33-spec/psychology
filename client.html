@@ -93,7 +93,7 @@
     </div>
 
     <script>
-        // 初始化选项
+       // 1. 初始化选项
         const emotions = ["学业焦虑", "未来迷茫焦虑", "社交焦虑", "经济焦虑", "空虚无聊", "自我否定", "莫名低落", "孤独", "烦躁", "情感内耗", "拖延", "疲惫", "嫉妒", "性压抑", "容貌焦虑"];
         let selected = "";
         const grid = document.getElementById('grid');
@@ -112,28 +112,33 @@
             grid.appendChild(div);
         });
 
-        // MQTT 连接与状态维护
+        // 2. MQTT 连接与状态维护
         const TOPIC = 'bjtu/psycho/energy_field'; 
         const mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt');
+        
+        // 生成当前设备的唯一 ID (用来防止人数漏算或重复计算)
+        const deviceId = 'u_' + Math.random().toString(16).slice(2, 8);
 
         mqttClient.on('connect', () => { 
             document.getElementById('client-dot').classList.add('online');
             document.getElementById('client-status').innerText = '已连接';
+            // 连上后立即向大屏报到
+            mqttClient.publish(TOPIC, JSON.stringify({ type: 'join', nickname: deviceId }));
         });
+        
         mqttClient.on('offline', () => { 
             document.getElementById('client-dot').classList.remove('online');
             document.getElementById('client-status').innerText = '已断线';
         });
 
-        // 提交核心答案
+        // 3. 提交核心答案
         function submitAnswer() {
             if(selected && mqttClient.connected) {
-                mqttClient.publish(TOPIC, JSON.stringify({ type: 'submit_emotion', choice: selected }));
+                // 发送数据时带上设备 ID
+                mqttClient.publish(TOPIC, JSON.stringify({ type: 'submit_emotion', choice: selected, nickname: deviceId }));
                 
-                // 撒花
                 confetti({ particleCount: 100, spread: 70, origin: { y: 0.5 }, colors: ['#2563eb', '#8b5cf6', '#ffffff'] });
                 
-                // 切换UI：隐藏答题区，显示完成区
                 document.getElementById('survey-section').style.display = 'none';
                 document.getElementById('done-section').style.display = 'flex';
             } else if (!mqttClient.connected) {
@@ -141,15 +146,15 @@
             }
         }
 
-        // 发送独立弹幕
+        // 4. 发送独立弹幕
         function sendDanmaku() {
             const input = document.getElementById('dm-input');
             const text = input.value.trim();
             if (text && mqttClient.connected) {
-                mqttClient.publish(TOPIC, JSON.stringify({ type: 'send_danmaku', content: text }));
-                input.value = ''; // 清空输入框
+                // 发送弹幕时带上设备 ID
+                mqttClient.publish(TOPIC, JSON.stringify({ type: 'send_danmaku', content: text, nickname: deviceId }));
+                input.value = ''; 
                 
-                // 给按钮加个小动画反馈
                 const btn = document.querySelector('.dm-btn');
                 btn.innerText = '已发';
                 setTimeout(() => btn.innerText = '发送', 1000);

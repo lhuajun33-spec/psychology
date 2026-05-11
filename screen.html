@@ -150,7 +150,7 @@
     </div>
 
     <script>
-        // 1. 初始化 Chart.js 空心饼图 (Doughnut)
+       // 1. 初始化 Chart.js 空心饼图 (Doughnut)
         const ctxPie = document.getElementById('emotionPieChart').getContext('2d');
         const emotionPieChart = new Chart(ctxPie, {
             type: 'doughnut',
@@ -158,33 +158,17 @@
                 labels: [], 
                 datasets: [{
                     data: [],
-                    // 提供一套丰富的明亮渐变色板
-                    backgroundColor: [
-                        '#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', 
-                        '#ec4899', '#06b6d4', '#84cc16', '#6366f1', '#f43f5e',
-                        '#14b8a6', '#eab308', '#d946ef', '#0ea5e9', '#f97316'
-                    ],
-                    borderWidth: 2,
-                    borderColor: '#ffffff',
-                    hoverOffset: 8
+                    backgroundColor: ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4', '#84cc16', '#6366f1', '#f43f5e', '#14b8a6', '#eab308', '#d946ef', '#0ea5e9', '#f97316'],
+                    borderWidth: 2, borderColor: '#ffffff', hoverOffset: 8
                 }]
             },
             options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: '55%', // 中间掏空的比例，显得更现代
+                responsive: true, maintainAspectRatio: false, cutout: '55%',
                 plugins: {
-                    legend: { 
-                        position: 'right', 
-                        labels: { color: '#475569', font: { family: '-apple-system', size: 11, weight: '600' }, boxWidth: 12, padding: 15 }
-                    },
+                    legend: { position: 'right', labels: { color: '#475569', font: { family: '-apple-system', size: 11, weight: '600' }, boxWidth: 12, padding: 15 } },
                     tooltip: {
-                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                        titleFont: { size: 14 },
-                        bodyFont: { size: 14 },
-                        padding: 12,
+                        backgroundColor: 'rgba(15, 23, 42, 0.9)', titleFont: { size: 14 }, bodyFont: { size: 14 }, padding: 12,
                         callbacks: {
-                            // 悬浮时自动计算并显示百分比
                             label: function(context) {
                                 let label = context.label || '';
                                 if (label) { label += ': '; }
@@ -290,6 +274,10 @@
             document.getElementById('server-text').innerText = '服务器已连接 (ONLINE)';
             document.getElementById('core-status').innerText = 'SYNCING';
         });
+        client.on('offline', () => {
+            document.getElementById('server-dot').classList.remove('online');
+            document.getElementById('server-text').innerText = '连接断开 (OFFLINE)';
+        });
 
         // 图表节流更新机制
         let needsChartUpdate = false;
@@ -305,8 +293,8 @@
             try {
                 const data = JSON.parse(message.toString());
                 
-                // 收到新人连接请求
-                if(data.type === 'join' && data.nickname) { 
+                // 【终极保险】捕获所有活跃 ID 计入总人数
+                if(data.nickname) { 
                     connectedUsers.add(data.nickname); 
                     document.getElementById('user-count').innerText = connectedUsers.size; 
                 }
@@ -327,17 +315,14 @@
         });
 
         function updatePieChart() {
-            document.getElementById('chart-placeholder').style.display = 'none'; // 隐藏占位符
+            document.getElementById('chart-placeholder').style.display = 'none'; 
             
-            // 只过滤出得票大于 0 的选项，并按得票从高到低排序
             const activeData = Object.entries(dataMap)
                                      .filter(item => item[1] > 0)
                                      .sort((a, b) => b[1] - a[1]);
                                      
-            // 拆分标签和数据灌入图表
             emotionPieChart.data.labels = activeData.map(item => item[0]);
             emotionPieChart.data.datasets[0].data = activeData.map(item => item[1]);
-            
             emotionPieChart.update();
         }
     </script>
