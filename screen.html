@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <title>明晰之境 | 情绪监测网</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         :root { 
             --primary: #2563eb; 
             --accent: #8b5cf6;  
             --bg: #f8fafc;      
-            --panel: rgba(255, 255, 255, 0.7); 
+            --panel: rgba(255, 255, 255, 0.75); 
             --border: rgba(255, 255, 255, 0.9);
             --text-dark: #0f172a;
             --text-muted: #64748b;
@@ -28,7 +29,7 @@
         .layout { display: flex; justify-content: space-between; padding: 30px; height: 100vh; box-sizing: border-box; position: relative; z-index: 10;}
 
         .side-panel { 
-            width: 360px; height: 100%; display: flex; flex-direction: column;
+            width: 380px; height: 100%; display: flex; flex-direction: column;
             background: var(--panel); border: 1px solid var(--border); border-radius: 24px; 
             backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); 
             padding: 25px; box-sizing: border-box; box-shadow: 0 10px 40px rgba(0,0,0,0.04);
@@ -44,12 +45,13 @@
         
         .stat-block { margin-bottom: 20px; }
         .big-number { font-size: 3.2rem; font-weight: 900; color: var(--text-dark); line-height: 1;}
-        .sub-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;}
+        .sub-label { font-size: 0.85rem; color: var(--text-muted); font-weight: 700;}
 
         .qr-section { margin-top: auto; background: white; border-radius: 16px; padding: 15px; display: flex; align-items: center; gap: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.05);}
         .qr-section img { width: 90px; height: 90px; border-radius: 8px;}
         .timer-small { font-size: 1.8rem; font-weight: bold; color: var(--primary); font-family: monospace;}
 
+        /* 中央视觉区 */
         .center-stage { 
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             width: 700px; height: 700px; display: flex; align-items: center; justify-content: center; z-index: 5;
@@ -66,6 +68,7 @@
         .core-label h1 { margin: 0; font-size: 1.4rem; letter-spacing: 8px; color: var(--text-dark); font-weight: 800;}
         .core-label p { margin: 5px 0 0 0; color: var(--primary); font-size: 0.9rem; font-weight: bold; letter-spacing: 2px;}
 
+        /* 答题喷泉气泡 */
         .answer-bubble {
             position: absolute; z-index: 40; padding: 10px 20px;
             background: rgba(255, 255, 255, 0.95); border: 2px solid var(--primary); border-radius: 30px;
@@ -82,13 +85,7 @@
             100% { opacity: 0; transform: translate(calc(var(--tx) * 1.8), calc(var(--ty) * 1.8 - 100px)) scale(0.9); }
         }
 
-        .stats-list { flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 12px; }
-        .stat-item { display: flex; align-items: center; background: white; padding: 12px 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.03);}
-        .stat-name { width: 100px; font-size: 0.95rem; font-weight: 700; color: var(--text-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
-        .stat-bar-bg { flex: 1; height: 8px; background: rgba(0,0,0,0.04); border-radius: 4px; margin: 0 10px; overflow: hidden;}
-        .stat-bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--accent)); width: 0%; transition: width 0.5s ease-out; }
-        .stat-count { font-size: 1.1rem; font-weight: 800; color: var(--primary); width: 30px; text-align: right; }
-
+        /* 划过弹幕 */
         #danmaku-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 100; overflow: hidden;}
         .danmaku-item { 
             position: absolute; white-space: nowrap; font-size: 26px; font-weight: 800; 
@@ -97,6 +94,9 @@
             animation: slideAcross linear forwards; 
         }
         @keyframes slideAcross { from { transform: translateX(100vw); } to { transform: translateX(-100%); } }
+
+        /* 饼图容器 */
+        .chart-container { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; min-height: 300px; margin-top: 10px;}
     </style>
 </head>
 <body>
@@ -122,42 +122,93 @@
 
             <h2>SYS_STATUS</h2>
             <div class="stat-block">
-                <div class="big-number" id="total-count">0</div>
-                <div class="sub-label">已捕获潜意识碎片</div>
+                <div class="big-number" id="user-count" style="color: var(--primary);">0</div>
+                <div class="sub-label">已连入总人数 (Active Users)</div>
+            </div>
+            
+            <div class="stat-block">
+                <div class="big-number" id="total-count" style="color: var(--accent);">0</div>
+                <div class="sub-label">已收到情绪样本 (Data Count)</div>
             </div>
             
             <div class="qr-section">
                 <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://psychology12.netlify.app/client.html" alt="QR">
                 <div>
-                    <div style="font-size:0.85rem; color:var(--text-muted); font-weight:600;">扫码接入意识网络</div>
+                    <div style="font-size:0.85rem; color:var(--text-muted); font-weight:600;">扫码提交情绪样本</div>
                     <div class="timer-small" id="timer">05:00</div>
                 </div>
             </div>
         </div>
 
         <div class="side-panel">
-            <h2>DATA_RANKING</h2>
-            <div class="stats-list" id="ranking-list">
-                <div style="text-align: center; color: var(--text-muted); margin-top: 150px; font-weight: bold;">等待样本注入...</div>
+            <h2>DATA_PERCENTAGE</h2>
+            <div class="chart-container">
+                <canvas id="emotionPieChart"></canvas>
+                <div id="chart-placeholder" style="position: absolute; font-weight:bold; color:var(--text-muted);">等待数据注入...</div>
             </div>
         </div>
     </div>
 
     <script>
-        // 1. Canvas 动效
+        // 1. 初始化 Chart.js 空心饼图 (Doughnut)
+        const ctxPie = document.getElementById('emotionPieChart').getContext('2d');
+        const emotionPieChart = new Chart(ctxPie, {
+            type: 'doughnut',
+            data: {
+                labels: [], 
+                datasets: [{
+                    data: [],
+                    // 提供一套丰富的明亮渐变色板
+                    backgroundColor: [
+                        '#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', 
+                        '#ec4899', '#06b6d4', '#84cc16', '#6366f1', '#f43f5e',
+                        '#14b8a6', '#eab308', '#d946ef', '#0ea5e9', '#f97316'
+                    ],
+                    borderWidth: 2,
+                    borderColor: '#ffffff',
+                    hoverOffset: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '55%', // 中间掏空的比例，显得更现代
+                plugins: {
+                    legend: { 
+                        position: 'right', 
+                        labels: { color: '#475569', font: { family: '-apple-system', size: 11, weight: '600' }, boxWidth: 12, padding: 15 }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                        titleFont: { size: 14 },
+                        bodyFont: { size: 14 },
+                        padding: 12,
+                        callbacks: {
+                            // 悬浮时自动计算并显示百分比
+                            label: function(context) {
+                                let label = context.label || '';
+                                if (label) { label += ': '; }
+                                const val = context.raw;
+                                const total = context.chart._metasets[context.datasetIndex].total;
+                                const percentage = Math.round((val / total) * 100) + '%';
+                                return label + val + ' 票 (' + percentage + ')';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // 2. Canvas 神经元动效
         const canvas = document.getElementById('neural-canvas');
         const ctx = canvas.getContext('2d');
         let particles = [];
-        const particleCount = 45;
-        const radius = 200;
-
-        for (let i = 0; i < particleCount; i++) {
+        for (let i = 0; i < 45; i++) {
             particles.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, vx: (Math.random() - 0.5) * 1, vy: (Math.random() - 0.5) * 1, size: Math.random() * 2 + 1 });
         }
-
         function drawNeuralNetwork() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.beginPath(); ctx.arc(radius, radius, radius - 5, 0, Math.PI * 2); ctx.clip();
+            ctx.beginPath(); ctx.arc(200, 200, 195, 0, Math.PI * 2); ctx.clip();
             ctx.fillStyle = '#2563eb'; ctx.lineWidth = 0.8;
             particles.forEach((p, index) => {
                 p.x += p.vx; p.y += p.vy;
@@ -177,12 +228,11 @@
             setTimeout(() => canvas.style.transform = 'scale(1)', 150);
         }
 
-        // 2. 气泡涌出动效
+        // 3. 气泡涌出动效 (防重叠)
         let activeBubbles = 0;
         function spawnAnswerBubble(text) {
             if (activeBubbles > 40) return;
             activeBubbles++;
-            
             const stage = document.getElementById('center-stage');
             const el = document.createElement('div');
             el.className = 'answer-bubble';
@@ -195,50 +245,44 @@
             
             el.style.setProperty('--tx', `${tx}px`);
             el.style.setProperty('--ty', `${ty}px`);
-            
             stage.appendChild(el);
             setTimeout(() => { el.remove(); activeBubbles--; }, 3000);
         }
 
-        // 3. 弹幕引擎
+        // 4. 弹幕引擎
         let activeDanmaku = 0;
         function spawnDanmaku(text) {
             if (activeDanmaku > 50) return; 
             activeDanmaku++;
-            
             const layer = document.getElementById('danmaku-layer');
             const el = document.createElement('div');
             el.className = 'danmaku-item';
             el.innerText = text;
-            
             el.style.top = (Math.random() * 70 + 15) + '%';
             el.style.animationDuration = (Math.random() * 4 + 5) + 's';
-            
             layer.appendChild(el);
             setTimeout(() => { el.remove(); activeDanmaku--; }, 9000);
         }
 
-        // 4. 完美倒计时引擎
-        let sec = 300; // 在这里修改总秒数！300 就是 5 分钟
+        // 5. 倒计时
+        let sec = 300; 
         const timerInt = setInterval(() => {
             if(sec > 0) { 
                 sec--; 
-                const m = Math.floor(sec / 60);
-                const s = sec % 60;
+                const m = Math.floor(sec / 60); const s = sec % 60;
                 document.getElementById('timer').innerText = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`; 
-            } 
-            else { 
-                document.getElementById('timer').innerText = "LOCKED"; 
-                clearInterval(timerInt); 
+            } else { 
+                document.getElementById('timer').innerText = "LOCKED"; clearInterval(timerInt); 
             }
         }, 1000);
 
-        // 5. MQTT 通信
+        // 6. MQTT 通信与图表更新
         const emotions = ["学业焦虑", "未来迷茫焦虑", "社交焦虑", "经济焦虑", "空虚无聊", "自我否定", "莫名低落", "孤独", "烦躁", "情感内耗", "拖延", "疲惫", "嫉妒", "性压抑", "容貌焦虑"];
         let dataMap = {}; emotions.forEach(e => dataMap[e] = 0);
 
         const TOPIC = 'bjtu/psycho/energy_field'; 
         const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt');
+        let connectedUsers = new Set();
         
         client.on('connect', () => { 
             client.subscribe(TOPIC); 
@@ -246,48 +290,55 @@
             document.getElementById('server-text').innerText = '服务器已连接 (ONLINE)';
             document.getElementById('core-status').innerText = 'SYNCING';
         });
-        client.on('offline', () => {
-            document.getElementById('server-dot').classList.remove('online');
-            document.getElementById('server-text').innerText = '连接断开 (OFFLINE)';
-        });
 
-        let needsRankingUpdate = false;
+        // 图表节流更新机制
+        let needsChartUpdate = false;
         setInterval(() => {
-            if (needsRankingUpdate) {
-                updateRankingDOM();
+            if (needsChartUpdate) {
+                updatePieChart();
                 document.getElementById('total-count').innerText = Object.values(dataMap).reduce((a,b)=>a+b, 0);
-                needsRankingUpdate = false;
+                needsChartUpdate = false;
             }
         }, 500);
 
         client.on('message', (topic, message) => {
             try {
                 const data = JSON.parse(message.toString());
+                
+                // 收到新人连接请求
+                if(data.type === 'join' && data.nickname) { 
+                    connectedUsers.add(data.nickname); 
+                    document.getElementById('user-count').innerText = connectedUsers.size; 
+                }
+                
+                // 收到情绪提交
                 if(data.type === 'submit_emotion') {
                     dataMap[data.choice]++;
-                    needsRankingUpdate = true;
+                    needsChartUpdate = true;
                     pulseCore();
                     spawnAnswerBubble(data.choice); 
                 }
+                
+                // 收到弹幕
                 else if (data.type === 'send_danmaku') {
                     spawnDanmaku(data.content);
                 }
             } catch(e) {}
         });
 
-        function updateRankingDOM() {
-            const listEl = document.getElementById('ranking-list');
-            const sorted = Object.entries(dataMap).filter(item => item[1] > 0).sort((a, b) => b[1] - a[1]).slice(0, 10);
-            if(sorted.length === 0) return;
-            listEl.innerHTML = '';
-            const maxVal = Math.max(...Object.values(dataMap));
-            sorted.forEach(([name, count]) => {
-                const perc = (count / maxVal) * 100;
-                const item = document.createElement('div');
-                item.className = 'stat-item';
-                item.innerHTML = `<div class="stat-name">${name}</div><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:${perc}%"></div></div><div class="stat-count">${count}</div>`;
-                listEl.appendChild(item);
-            });
+        function updatePieChart() {
+            document.getElementById('chart-placeholder').style.display = 'none'; // 隐藏占位符
+            
+            // 只过滤出得票大于 0 的选项，并按得票从高到低排序
+            const activeData = Object.entries(dataMap)
+                                     .filter(item => item[1] > 0)
+                                     .sort((a, b) => b[1] - a[1]);
+                                     
+            // 拆分标签和数据灌入图表
+            emotionPieChart.data.labels = activeData.map(item => item[0]);
+            emotionPieChart.data.datasets[0].data = activeData.map(item => item[1]);
+            
+            emotionPieChart.update();
         }
     </script>
 </body>
