@@ -6,9 +6,9 @@
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         :root { 
-            --primary: #2563eb; /* 亮眼科技蓝 */
-            --accent: #8b5cf6;  /* 灵动紫 */
-            --bg: #f8fafc;      /* 极浅蓝灰背景 */
+            --primary: #2563eb; 
+            --accent: #8b5cf6;  
+            --bg: #f8fafc;      
             --panel: rgba(255, 255, 255, 0.7); 
             --border: rgba(255, 255, 255, 0.9);
             --text-dark: #0f172a;
@@ -17,7 +17,6 @@
         
         body, html { margin: 0; padding: 0; height: 100vh; overflow: hidden; background: var(--bg); font-family: -apple-system, "PingFang SC", sans-serif; color: var(--text-dark); }
 
-        /* 浅色流体背景 */
         .animated-bg {
             position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: -1;
             background: radial-gradient(circle at 10% 20%, rgba(37,99,235,0.08) 0%, transparent 40%),
@@ -28,7 +27,6 @@
 
         .layout { display: flex; justify-content: space-between; padding: 30px; height: 100vh; box-sizing: border-box; position: relative; z-index: 10;}
 
-        /* 两侧玻璃面板 */
         .side-panel { 
             width: 360px; height: 100%; display: flex; flex-direction: column;
             background: var(--panel); border: 1px solid var(--border); border-radius: 24px; 
@@ -37,7 +35,6 @@
             z-index: 20;
         }
 
-        /* 顶部连接状态 */
         .status-bar { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.8); padding: 10px 15px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 4px 10px rgba(0,0,0,0.02);}
         .status-dot { width: 12px; height: 12px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 10px #ef4444; transition: 0.3s;}
         .status-dot.online { background: #10b981; box-shadow: 0 0 10px #10b981;}
@@ -49,12 +46,10 @@
         .big-number { font-size: 3.2rem; font-weight: 900; color: var(--text-dark); line-height: 1;}
         .sub-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;}
 
-        /* 二维码区域 */
         .qr-section { margin-top: auto; background: white; border-radius: 16px; padding: 15px; display: flex; align-items: center; gap: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.05);}
         .qr-section img { width: 90px; height: 90px; border-radius: 8px;}
         .timer-small { font-size: 1.8rem; font-weight: bold; color: var(--primary); font-family: monospace;}
 
-        /* === 中央视觉：神经网络与涌现动画 === */
         .center-stage { 
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             width: 700px; height: 700px; display: flex; align-items: center; justify-content: center; z-index: 5;
@@ -71,14 +66,12 @@
         .core-label h1 { margin: 0; font-size: 1.4rem; letter-spacing: 8px; color: var(--text-dark); font-weight: 800;}
         .core-label p { margin: 5px 0 0 0; color: var(--primary); font-size: 0.9rem; font-weight: bold; letter-spacing: 2px;}
 
-        /* 答题涌现动画 (浮现气泡) */
         .answer-bubble {
             position: absolute; z-index: 40; padding: 10px 20px;
             background: rgba(255, 255, 255, 0.95); border: 2px solid var(--primary); border-radius: 30px;
             color: var(--primary); font-size: 1.1rem; font-weight:800;
             box-shadow: 0 10px 20px rgba(37, 99, 235, 0.2);
             pointer-events: none; opacity: 0; 
-            /* 随机轨迹变量 */
             transform: translate(0, 0) scale(0.5);
             animation: floatUp 3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
         }
@@ -89,7 +82,6 @@
             100% { opacity: 0; transform: translate(calc(var(--tx) * 1.8), calc(var(--ty) * 1.8 - 100px)) scale(0.9); }
         }
 
-        /* 实时排行 */
         .stats-list { flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 12px; }
         .stat-item { display: flex; align-items: center; background: white; padding: 12px 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.03);}
         .stat-name { width: 100px; font-size: 0.95rem; font-weight: 700; color: var(--text-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
@@ -97,7 +89,6 @@
         .stat-bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--accent)); width: 0%; transition: width 0.5s ease-out; }
         .stat-count { font-size: 1.1rem; font-weight: 800; color: var(--primary); width: 30px; text-align: right; }
 
-        /* === 弹幕层 (划过动画) === */
         #danmaku-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 100; overflow: hidden;}
         .danmaku-item { 
             position: absolute; white-space: nowrap; font-size: 26px; font-weight: 800; 
@@ -110,7 +101,6 @@
 </head>
 <body>
     <div class="animated-bg"></div>
-    
     <div id="danmaku-layer"></div>
 
     <div class="center-stage" id="center-stage">
@@ -140,7 +130,7 @@
                 <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://psychology12.netlify.app/client.html" alt="QR">
                 <div>
                     <div style="font-size:0.85rem; color:var(--text-muted); font-weight:600;">扫码接入意识网络</div>
-                    <div class="timer-small" id="timer">00:30</div>
+                    <div class="timer-small" id="timer">05:00</div>
                 </div>
             </div>
         </div>
@@ -154,11 +144,11 @@
     </div>
 
     <script>
-        // --- 1. Canvas 浅色神经元动效 ---
+        // 1. Canvas 动效
         const canvas = document.getElementById('neural-canvas');
         const ctx = canvas.getContext('2d');
         let particles = [];
-        const particleCount = 45; // 控制数量防卡
+        const particleCount = 45;
         const radius = 200;
 
         for (let i = 0; i < particleCount; i++) {
@@ -187,10 +177,10 @@
             setTimeout(() => canvas.style.transform = 'scale(1)', 150);
         }
 
-        // --- 2. 高并发防重叠：情绪喷泉 (答案从中心涌现) ---
+        // 2. 气泡涌出动效
         let activeBubbles = 0;
         function spawnAnswerBubble(text) {
-            if (activeBubbles > 40) return; // 超过40个则丢弃动画，防止70人同时交卡死
+            if (activeBubbles > 40) return;
             activeBubbles++;
             
             const stage = document.getElementById('center-stage');
@@ -198,9 +188,8 @@
             el.className = 'answer-bubble';
             el.innerText = text;
             
-            // 喷泉算法：随机生成 360 度的抛射角度和距离
             const angle = Math.random() * Math.PI * 2;
-            const distance = Math.random() * 150 + 100; // 扩散半径 100~250px
+            const distance = Math.random() * 150 + 100; 
             const tx = Math.cos(angle) * distance;
             const ty = Math.sin(angle) * distance;
             
@@ -211,7 +200,7 @@
             setTimeout(() => { el.remove(); activeBubbles--; }, 3000);
         }
 
-        // --- 3. 独立弹幕引擎 (从右向左划过) ---
+        // 3. 弹幕引擎
         let activeDanmaku = 0;
         function spawnDanmaku(text) {
             if (activeDanmaku > 50) return; 
@@ -222,25 +211,20 @@
             el.className = 'danmaku-item';
             el.innerText = text;
             
-            // 随机高度
             el.style.top = (Math.random() * 70 + 15) + '%';
-            // 随机速度 5s 到 9s
             el.style.animationDuration = (Math.random() * 4 + 5) + 's';
             
             layer.appendChild(el);
             setTimeout(() => { el.remove(); activeDanmaku--; }, 9000);
         }
 
-        //  倒计时
-  
-        let sec = 300; 
+        // 4. 完美倒计时引擎
+        let sec = 300; // 在这里修改总秒数！300 就是 5 分钟
         const timerInt = setInterval(() => {
             if(sec > 0) { 
                 sec--; 
-               
                 const m = Math.floor(sec / 60);
                 const s = sec % 60;
-               
                 document.getElementById('timer').innerText = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`; 
             } 
             else { 
@@ -249,14 +233,13 @@
             }
         }, 1000);
 
-        // MQTT 通信与节流渲染 
+        // 5. MQTT 通信
         const emotions = ["学业焦虑", "未来迷茫焦虑", "社交焦虑", "经济焦虑", "空虚无聊", "自我否定", "莫名低落", "孤独", "烦躁", "情感内耗", "拖延", "疲惫", "嫉妒", "性压抑", "容貌焦虑"];
         let dataMap = {}; emotions.forEach(e => dataMap[e] = 0);
 
         const TOPIC = 'bjtu/psycho/energy_field'; 
         const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt');
         
-        // 连接状态指示
         client.on('connect', () => { 
             client.subscribe(TOPIC); 
             document.getElementById('server-dot').classList.add('online');
@@ -268,7 +251,6 @@
             document.getElementById('server-text').innerText = '连接断开 (OFFLINE)';
         });
 
-        // 排行榜节流
         let needsRankingUpdate = false;
         setInterval(() => {
             if (needsRankingUpdate) {
@@ -281,15 +263,12 @@
         client.on('message', (topic, message) => {
             try {
                 const data = JSON.parse(message.toString());
-                
-                // 收到答案提交 (核心涌现)
                 if(data.type === 'submit_emotion') {
                     dataMap[data.choice]++;
                     needsRankingUpdate = true;
                     pulseCore();
                     spawnAnswerBubble(data.choice); 
                 }
-                // 收到独立弹幕 (划过屏幕)
                 else if (data.type === 'send_danmaku') {
                     spawnDanmaku(data.content);
                 }
