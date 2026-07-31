@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIP专属账户查询系统</title>
+    <!-- 引入 MQTT.js -->
+  <script src="https://cdn.staticfile.net/mqtt/4.3.7/mqtt.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-color: #f3f4f6;
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --danger: #ef4444;
+            --success: #10b981;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #e0e7ff 0%, #f3e8ff 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--text-main);
+            overflow: hidden; 
+        }
+
+        .container {
+            width: 100%;
+            max-width: 420px;
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            padding: 2.5rem 2rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+            position: relative;
+            z-index: 10;
+            transition: all 0.3s ease;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .container::-webkit-scrollbar { display: none; }
+        .container { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .screen { display: none; animation: fadeIn 0.4s ease forwards; }
+        .screen.active { display: block; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h2 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.5rem; text-align: center; color: #111827; }
+        p.subtitle { text-align: center; color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2rem; }
+
+        .input-group { margin-bottom: 1.5rem; }
+        .input-group label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.5rem; color: #374151; }
+        .input-group input {
+            width: 100%; padding: 0.85rem 1rem; border: 1px solid #d1d5db;
+            border-radius: 10px; font-size: 1rem; outline: none; transition: border-color 0.2s;
+            background: rgba(255, 255, 255, 0.9);
+        }
+        .input-group input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+
+        button {
+            width: 100%; padding: 0.85rem; background: var(--primary); color: white;
+            border: none; border-radius: 10px; font-size: 1rem; font-weight: 600;
+            cursor: pointer; transition: background 0.2s;
+        }
+        button:hover { background: var(--primary-hover); }
+
+        .vip-card {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border-radius: 16px; padding: 1.5rem; color: white; margin-bottom: 1.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); position: relative; overflow: hidden;
+        }
+        .vip-card::after {
+            content: ''; position: absolute; top: -50%; right: -20%; width: 150px; height: 150px;
+            background: rgba(255, 255, 255, 0.1); border-radius: 50%;
+        }
+        .card-label { font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 1px; }
+        .card-number { font-size: 1.5rem; font-family: monospace; letter-spacing: 2px; margin-bottom: 1rem; }
+        .card-holder { font-size: 1rem; font-weight: 500; }
+
+        .section-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between;}
+        .edit-hint { font-size: 0.75rem; color: #9ca3af; font-weight: normal; }
+        
+        [contenteditable="true"] { outline: none; padding: 2px 4px; transition: background 0.2s; border-radius: 4px; }
+        [contenteditable="true"]:focus { background: rgba(37,99,235,0.1); box-shadow: 0 0 0 1px rgba(37,99,235,0.3); }
+
+        /* 删除按钮样式 */
+        .delete-btn {
+            cursor: pointer; color: #ef4444; font-weight: bold; font-size: 1.1rem;
+            opacity: 0.3; transition: opacity 0.2s; margin-left: 8px; line-height: 1;
+            user-select: none;
+        }
+        .delete-btn:hover { opacity: 1; }
+
+        /* 禁忌列表 */
+        .alert-list { list-style: none; margin-bottom: 1rem; display: flex; flex-wrap: wrap; gap: 8px; }
+        .alert-list li { 
+            background: #fef2f2; color: var(--danger); padding: 0.4rem 0.6rem 0.4rem 0.8rem; 
+            border-radius: 20px; font-size: 0.85rem; font-weight: 500; border: 1px solid #fecaca;
+            display: flex; align-items: center;
+        }
+
+        /* 待办列表 */
+        .todo-list { list-style: none; margin-bottom: 1rem; }
+        .todo-list li { 
+            background: white; padding: 0.85rem 1rem; border-radius: 10px; margin-bottom: 0.75rem; 
+            display: flex; justify-content: space-between; align-items: center; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02); border: 1px solid #f3f4f6;
+        }
+        .todo-content { display: flex; justify-content: space-between; width: 100%; align-items: center; padding-right: 10px; }
+        .todo-list li .task { font-weight: 500; color: #374151; flex: 1; }
+        .todo-list li .amount { background: #eef2ff; color: var(--primary); padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600; text-align: right; }
+
+        /* 添加表单 (CRUD的增) */
+        .add-form { display: flex; gap: 8px; margin-bottom: 1.5rem; }
+        .add-form input { flex: 1; padding: 0.6rem; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.85rem; outline: none; }
+        .add-form input:focus { border-color: var(--primary); }
+        .add-form button { width: auto; padding: 0.6rem 1rem; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.85rem; }
+        .add-form button:hover { background: #e5e7eb; }
+
+        .error-msg { color: var(--danger); font-size: 0.85rem; text-align: center; margin-top: 1rem; min-height: 20px; }
+
+        /* 弹幕输入区 */
+        .danmaku-control { display: flex; gap: 8px; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px dashed #d1d5db; }
+        .danmaku-control input { flex: 1; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.9rem; outline: none; }
+        .danmaku-control button { width: auto; padding: 0.75rem 1rem; border-radius: 8px; }
+
+        /* 弹幕轨道容器 */
+        #danmaku-container {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            pointer-events: none; z-index: 100; overflow: hidden;
+        }
+        .danmaku-item {
+            position: absolute; white-space: nowrap; font-size: 1.25rem; font-weight: bold;
+            color: white; text-shadow: 1px 1px 3px rgba(0,0,0,0.6);
+            will-change: transform; animation: slideLeft 7s linear forwards;
+        }
+        @keyframes slideLeft {
+            from { transform: translateX(100vw); }
+            to { transform: translateX(-100%); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 弹幕层 -->
+    <div id="danmaku-container"></div>
+
+    <div class="container">
+        
+        <!-- 第一步：验证姓名 -->
+        <div id="screen-name" class="screen active">
+            <h2>专属账户查询</h2>
+            <p class="subtitle">身份安全验证系统</p>
+            <div class="input-group">
+                <label>请输入专属联系人姓名以继续</label>
+                <input type="text" id="nameInput" placeholder="输入真实人名" autocomplete="off">
+            </div>
+            <button onclick="verifyName()">验证身份</button>
+            <div id="nameError" class="error-msg"></div>
+        </div>
+
+        <!-- 第二步：账号密码登录 -->
+        <div id="screen-login" class="screen">
+            <h2>系统登录</h2>
+            <p class="subtitle">欢迎回来</p>
+            <div class="input-group">
+                <label>专属账号</label>
+                <input type="text" id="accInput" placeholder="请输入账号" autocomplete="off">
+            </div>
+            <div class="input-group">
+                <label>查询密码</label>
+                <input type="password" id="pwdInput" placeholder="请输入密码">
+            </div>
+            <button onclick="verifyLogin()">登录记录面板</button>
+            <div id="loginError" class="error-msg"></div>
+        </div>
+
+        <!-- 第三步：专属面板 -->
+        <div id="screen-dashboard" class="screen">
+            <h2>专属资产与备忘</h2>
+            <p class="subtitle">内部机密记录面板</p>
+            
+            <div class="vip-card">
+                <div class="card-label">专属记录卡号</div>
+                <div class="card-number">1021 1202</div>
+                <div class="card-holder">持卡人：谢小珂</div>
+            </div>
+
+            <!-- 禁忌事项 CRUD -->
+            <div class="section-title">
+                <div><span>🚫</span> 绝对禁忌清单</div>
+                <span class="edit-hint">点击文字修改</span>
+            </div>
+            <ul class="alert-list" id="alertList"></ul>
+            <div class="add-form">
+                <input type="text" id="newAlertInput" placeholder="新增禁忌事项...">
+                <button onclick="addAlert()">添加</button>
+            </div>
+
+            <!-- 待履行事项 CRUD -->
+            <div class="section-title">
+                <div><span>📝</span> 待履行事项</div>
+                <span class="edit-hint">点击文字修改</span>
+            </div>
+            <ul class="todo-list" id="todoList"></ul>
+            <div class="add-form">
+                <input type="text" id="newTaskInput" placeholder="事项名称">
+                <input type="text" id="newAmountInput" placeholder="要求/数量">
+                <button onclick="addTodo()">添加</button>
+            </div>
+
+            <!-- 弹幕交互区 -->
+            <div class="danmaku-control">
+                <input type="text" id="danmakuInput" placeholder="发送弹幕..." autocomplete="off">
+                <button onclick="sendDanmaku()">发送</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- 路由与鉴权 ---
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+        }
+
+        function verifyName() {
+            const name = document.getElementById('nameInput').value.trim();
+            const errorDiv = document.getElementById('nameError');
+            if (name === '谢小珂') {
+                errorDiv.innerText = '';
+                showScreen('screen-login');
+            } else {
+                errorDiv.innerText = '查无此人';
+            }
+        }
+
+        function verifyLogin() {
+            const acc = document.getElementById('accInput').value.trim();
+            const pwd = document.getElementById('pwdInput').value.trim();
+            const errorDiv = document.getElementById('loginError');
+
+            if (acc === '10211202' && pwd === '418525') {
+                errorDiv.innerText = '';
+                showScreen('screen-dashboard');
+                initData(); // 初始化并渲染数据
+                initMQTT(); // 连接 MQTT
+            } else {
+                errorDiv.innerText = '账号或密码错误，请重新输入。';
+            }
+        }
+
+        document.getElementById('nameInput').addEventListener('keypress', e => { if (e.key === 'Enter') verifyName(); });
+        document.getElementById('pwdInput').addEventListener('keypress', e => { if (e.key === 'Enter') verifyLogin(); });
+        document.getElementById('danmakuInput').addEventListener('keypress', e => { if (e.key === 'Enter') sendDanmaku(); });
+        document.getElementById('newAlertInput').addEventListener('keypress', e => { if (e.key === 'Enter') addAlert(); });
+        document.getElementById('newAmountInput').addEventListener('keypress', e => { if (e.key === 'Enter') addTodo(); });
+
+        // --- 核心数据 CRUD 逻辑 ---
+        let alertsData = [];
+        let todosData = [];
+
+        const defaultAlerts = ["所有菌类", "银耳 / 木耳", "三文鱼", "鲍鱼 / 甜虾", "所有生鲜", "鱿鱼 / 章鱼"];
+        const defaultTodos = [
+            { task: "欠巴掌", amount: "5 ✖️ 3组" },
+            { task: "欠大番茄", amount: "1:1 1米8肌肉款" },
+            { task: "看电影", amount: "请小珂" },
+            { task: "吃大餐", amount: "请小珂" }
+        ];
+
+        function initData() {
+            const storedAlerts = localStorage.getItem('vip_alerts_v2');
+            const storedTodos = localStorage.getItem('vip_todos_v2');
+            
+            alertsData = storedAlerts ? JSON.parse(storedAlerts) : [...defaultAlerts];
+            todosData = storedTodos ? JSON.parse(storedTodos) : JSON.parse(JSON.stringify(defaultTodos));
+            
+            renderAll();
+        }
+
+        function saveData() {
+            localStorage.setItem('vip_alerts_v2', JSON.stringify(alertsData));
+            localStorage.setItem('vip_todos_v2', JSON.stringify(todosData));
+        }
+
+        function renderAll() {
+            renderAlerts();
+            renderTodos();
+            saveData();
+        }
+
+        // 渲染禁忌列表
+        function renderAlerts() {
+            const list = document.getElementById('alertList');
+            list.innerHTML = '';
+            alertsData.forEach((item, index) => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <span contenteditable="true" onblur="updateAlert(${index}, this.innerText)">${item}</span>
+                    <span class="delete-btn" title="删除" onclick="deleteAlert(${index})">×</span>
+                `;
+                list.appendChild(li);
+            });
+        }
+
+        // 渲染待办列表
+        function renderTodos() {
+            const list = document.getElementById('todoList');
+            list.innerHTML = '';
+            todosData.forEach((item, index) => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <div class="todo-content">
+                        <span class="task" contenteditable="true" onblur="updateTodoTask(${index}, this.innerText)">${item.task}</span>
+                        <span class="amount" contenteditable="true" onblur="updateTodoAmount(${index}, this.innerText)">${item.amount}</span>
+                    </div>
+                    <span class="delete-btn" title="删除" onclick="deleteTodo(${index})">×</span>
+                `;
+                list.appendChild(li);
+            });
+        }
+
+        // C - 增加
+        function addAlert() {
+            const input = document.getElementById('newAlertInput');
+            const val = input.value.trim();
+            if (val) {
+                alertsData.push(val);
+                input.value = '';
+                renderAll();
+            }
+        }
+
+        function addTodo() {
+            const taskInput = document.getElementById('newTaskInput');
+            const amountInput = document.getElementById('newAmountInput');
+            const task = taskInput.value.trim();
+            const amount = amountInput.value.trim();
+            if (task && amount) {
+                todosData.push({ task, amount });
+                taskInput.value = '';
+                amountInput.value = '';
+                renderAll();
+            }
+        }
+
+        // U - 更新
+        function updateAlert(index, newVal) {
+            alertsData[index] = newVal.trim();
+            saveData(); // 直接保存，不重新渲染，以免打断用户焦点
+        }
+
+        function updateTodoTask(index, newVal) {
+            todosData[index].task = newVal.trim();
+            saveData();
+        }
+
+        function updateTodoAmount(index, newVal) {
+            todosData[index].amount = newVal.trim();
+            saveData();
+        }
+
+        // D - 删除
+        function deleteAlert(index) {
+            alertsData.splice(index, 1);
+            renderAll();
+        }
+
+        function deleteTodo(index) {
+            todosData.splice(index, 1);
+            renderAll();
+        }
+
+        // --- MQTT 弹幕逻辑 ---
+        let mqttClient;
+        const topic = 'vip/10211202/danmaku'; 
+
+        function initMQTT() {
+            if (mqttClient) return; 
+            const brokerUrl = 'wss://broker.emqx.io:8084/mqtt';
+            mqttClient = mqtt.connect(brokerUrl);
+
+            mqttClient.on('connect', () => {
+                console.log('MQTT 弹幕服务已连接');
+                mqttClient.subscribe(topic);
+            });
+
+            mqttClient.on('message', (topic, message) => {
+                createDanmakuElement(message.toString());
+            });
+        }
+
+        function sendDanmaku() {
+            const input = document.getElementById('danmakuInput');
+            const text = input.value.trim();
+            if (!text || !mqttClient) return;
+            mqttClient.publish(topic, text);
+            input.value = '';
+        }
+
+        function createDanmakuElement(text) {
+            const container = document.getElementById('danmaku-container');
+            const el = document.createElement('div');
+            el.className = 'danmaku-item';
+            el.innerText = text;
+            
+            // 【调整弹幕位置】：随机在 5% 到 30% 之间（屏幕中间靠上）
+            const topPosition = Math.random() * 25 + 5;
+            el.style.top = `${topPosition}vh`;
+            
+            const colors = ['#ffffff', '#fde047', '#a7f3d0', '#fbcfe8', '#c7d2fe'];
+            el.style.color = colors[Math.floor(Math.random() * colors.length)];
+
+            container.appendChild(el);
+
+            setTimeout(() => {
+                el.remove();
+            }, 7000); 
+        }
+    </script>
+</body>
+</html>
